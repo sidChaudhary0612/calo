@@ -1,0 +1,97 @@
+<div class="rm-screen">
+  <header class="rm-header" style="border-bottom-color:rgba(230,57,70,0.2)">
+    <span class="rm-header__title" style="color:var(--rm-red)">Emergency</span>
+    @if (activeAlerts().length > 0) {
+      <span class="rm-header__badge" style="background:var(--rm-red-glow);color:var(--rm-red);animation:pulse-dot 1.2s infinite;">
+        {{ activeAlerts().length }} Active
+      </span>
+    }
+  </header>
+
+  <div class="rm-body">
+    <!-- SOS Button -->
+    <div class="sos-section animate-slide-up">
+      @if (sosSent()) {
+        <div class="sos-sent">
+          <div class="sos-sent__icon">
+            <svg width="40" height="40" viewBox="0 0 24 24" fill="var(--rm-red)">
+              <path d="M12 2C6.48 2 2 6.48 2 12s4.48 10 10 10 10-4.48 10-10S17.52 2 12 2zm-2 15l-5-5 1.41-1.41L10 14.17l7.59-7.59L19 8l-9 9z"/>
+            </svg>
+          </div>
+          <h3 style="color:var(--rm-red)">SOS Sent</h3>
+          <p>Your location has been broadcast to all nearby riders.</p>
+        </div>
+      } @else {
+        <div class="sos-container">
+          <div class="sos-ring" [class.sos-ring--active]="isCounting()">
+            <button
+              class="sos-btn"
+              [class.sos-btn--counting]="isCounting()"
+              (pointerdown)="sosHoldStart()"
+              (pointerup)="sosHoldEnd()"
+              (pointerleave)="sosHoldEnd()"
+            >
+              @if (isCounting()) {
+                <span class="sos-countdown">{{ countdown() }}</span>
+              } @else {
+                <span class="sos-label">SOS</span>
+              }
+            </button>
+          </div>
+          <p class="sos-hint">Hold to send emergency alert to all riders</p>
+        </div>
+      }
+    </div>
+
+    <!-- Quick Alert Types -->
+    <div class="rm-section-label mt-lg">Quick Alerts</div>
+    <div class="alert-types animate-fade-in">
+      @for (type of [
+        { icon: '🏍️', label: 'Rider Down', color: 'red',    value: 'rider_down'  },
+        { icon: '🔧', label: 'Mechanical', color: 'orange', value: 'mechanical'  },
+        { icon: '⛽', label: 'Fuel Stop',  color: 'orange', value: 'mechanical'  },
+        { icon: '🏥', label: 'Medical',    color: 'red',    value: 'medical'     },
+      ]; track type.label) {
+        <button class="alert-type-btn rm-card rm-card--clickable" [class]="'alert-type-btn--' + type.color"
+                (click)="sendQuickAlert(type.value)">
+          <span class="alert-type-emoji">{{ type.icon }}</span>
+          <span class="alert-type-label">{{ type.label }}</span>
+        </button>
+      }
+    </div>
+
+    <!-- Active Alerts -->
+    @if (activeAlerts().length > 0) {
+      <div class="rm-section-label mt-lg" style="color:var(--rm-red)">
+        Active Alerts ({{ activeAlerts().length }})
+      </div>
+      <div class="alerts-list animate-fade-in">
+        @for (alert of activeAlerts(); track alert.id) {
+          <div class="rm-card alert-card" [class]="'alert-card--' + typeClass(alert.type)">
+            <div class="alert-header">
+              <div class="flex items-center gap-sm">
+                <span class="rm-dot" [class]="'rm-dot--' + typeClass(alert.type)"></span>
+                <span class="alert-type">{{ typeLabel(alert.type) }}</span>
+              </div>
+              <span class="alert-time">{{ alert.timestamp | date:'HH:mm' }}</span>
+            </div>
+            <div class="alert-rider">{{ alert.riderName }}</div>
+            <div class="alert-location">
+              {{ alert.location.lat.toFixed(4) }}, {{ alert.location.lng.toFixed(4) }}
+            </div>
+            <div class="flex gap-sm mt-sm">
+              <button class="rm-btn rm-btn--secondary" style="flex:1;min-height:44px;font-size:0.85rem;" (click)="resolve(alert)">
+                Resolved
+              </button>
+            </div>
+          </div>
+        }
+      </div>
+    }
+
+    <!-- Dev helper -->
+    <button class="rm-btn rm-btn--ghost rm-btn--full mt-lg" style="font-size:0.75rem;min-height:40px;" (click)="simulate()">
+      Simulate Incoming Alert
+    </button>
+  </div>
+</div>

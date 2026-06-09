@@ -1,0 +1,116 @@
+<div class="rm-screen">
+  <header class="rm-header">
+    <span class="rm-header__title">Music Sync</span>
+    @if (session()) {
+      <span class="rm-header__badge active">
+        <span class="rm-dot rm-dot--green"></span>
+        {{ syncedRiders() }} synced
+      </span>
+    }
+  </header>
+
+  <div class="rm-body">
+    @if (!session()) {
+      <!-- Session start -->
+      <div class="session-start animate-slide-up">
+        <div class="session-icon">
+          <svg width="48" height="48" viewBox="0 0 24 24" fill="var(--rm-orange)">
+            <path d="M12 3v10.55c-.59-.34-1.27-.55-2-.55-2.21 0-4 1.79-4 4s1.79 4 4 4 4-1.79 4-4V7h4V3h-6z"/>
+          </svg>
+        </div>
+        <h3>Group Music Sync</h3>
+        <p>Start a session to synchronize playback with your group. All riders hear the same track.</p>
+        <button class="rm-btn rm-btn--primary rm-btn--full mt-lg" (click)="music.startSession()">
+          Start Sync Session
+        </button>
+      </div>
+    } @else {
+      <!-- Now Playing -->
+      @if (current()) {
+        <div class="now-playing animate-slide-up">
+          <div class="album-art">
+            <div class="album-art__inner">
+              <svg width="40" height="40" viewBox="0 0 24 24" fill="var(--rm-orange)">
+                <path d="M12 3v10.55c-.59-.34-1.27-.55-2-.55-2.21 0-4 1.79-4 4s1.79 4 4 4 4-1.79 4-4V7h4V3h-6z"/>
+              </svg>
+            </div>
+            <div class="album-art__spinner" [class.spinning]="state() === 'playing'"></div>
+          </div>
+
+          <div class="track-info">
+            <div class="track-title">{{ current()!.title }}</div>
+            <div class="track-artist">{{ current()!.artist }}</div>
+          </div>
+
+          <!-- Progress -->
+          <div class="progress-row">
+            <span class="time-label">{{ music.formatTime(position()) }}</span>
+            <div class="progress-bar">
+              <div class="progress-fill" [style.width.%]="progress(current())"></div>
+            </div>
+            <span class="time-label">{{ music.formatTime(current()!.duration) }}</span>
+          </div>
+
+          <!-- Controls -->
+          <div class="playback-controls">
+            <button class="ctrl-btn" (click)="music.skipPrev()">
+              <svg width="28" height="28" viewBox="0 0 24 24" fill="currentColor"><path d="M6 6h2v12H6zm3.5 6 8.5 6V6z"/></svg>
+            </button>
+            <button class="play-btn" (click)="togglePlay()">
+              @if (state() === 'playing') {
+                <svg width="32" height="32" viewBox="0 0 24 24" fill="currentColor"><path d="M6 19h4V5H6v14zm8-14v14h4V5h-4z"/></svg>
+              } @else {
+                <svg width="32" height="32" viewBox="0 0 24 24" fill="currentColor"><path d="M8 5v14l11-7z"/></svg>
+              }
+            </button>
+            <button class="ctrl-btn" (click)="music.skipNext()">
+              <svg width="28" height="28" viewBox="0 0 24 24" fill="currentColor"><path d="M6 18l8.5-6L6 6v12zm2-8.14 5.06 2.14L8 14.14V9.86zM16 6h2v12h-2z"/></svg>
+            </button>
+          </div>
+
+          <!-- Sync info -->
+          <div class="sync-info rm-card">
+            <div class="flex items-center gap-sm">
+              <span class="rm-dot rm-dot--green"></span>
+              <span style="font-size:0.875rem;font-weight:600;color:var(--text-primary)">{{ syncedRiders() }} riders synced</span>
+            </div>
+            <span class="rm-badge rm-badge--green">Live Sync</span>
+          </div>
+        </div>
+      }
+
+      <!-- Track List -->
+      <div class="rm-section-label mt-lg">Queue</div>
+      <div class="track-list animate-fade-in">
+        @for (track of tracks(); track track.id) {
+          <div
+            class="rm-card track-row rm-card--clickable"
+            [class.track-row--active]="current()?.id === track.id"
+            (click)="selectTrack(track)"
+          >
+            <div class="track-num">
+              @if (current()?.id === track.id && state() === 'playing') {
+                <div class="playing-bars">
+                  @for (i of [1,2,3]; track i) {
+                    <div class="p-bar" [style.animation-delay.ms]="i * 100"></div>
+                  }
+                </div>
+              } @else {
+                <span>{{ $index + 1 }}</span>
+              }
+            </div>
+            <div class="track-details">
+              <div class="t-title" [class.t-title--active]="current()?.id === track.id">{{ track.title }}</div>
+              <div class="t-artist">{{ track.artist }}</div>
+            </div>
+            <span class="t-dur">{{ music.formatTime(track.duration) }}</span>
+          </div>
+        }
+      </div>
+
+      <button class="rm-btn rm-btn--danger rm-btn--full mt-lg" (click)="music.endSession()">
+        End Session
+      </button>
+    }
+  </div>
+</div>

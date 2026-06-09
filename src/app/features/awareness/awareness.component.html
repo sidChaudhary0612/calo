@@ -1,0 +1,81 @@
+<div class="rm-screen">
+  <header class="rm-header">
+    <span class="rm-header__title">Rider Awareness</span>
+    @if (inGroup()) {
+      <span class="rm-header__badge active">
+        <span class="rm-dot rm-dot--green"></span>
+        {{ members().length }} Riders
+      </span>
+    }
+  </header>
+
+  <div class="awareness-body">
+    <!-- Speed / Bearing strip -->
+    <div class="stats-strip animate-slide-up">
+      <div class="stat-chip rm-card">
+        <span class="stat-value">{{ speed() }}</span>
+        <span class="stat-unit">km/h</span>
+      </div>
+      <div class="stat-chip rm-card compass-chip">
+        <div class="compass">
+          <div class="compass__needle" [style.transform]="'rotate(' + bearing() + 'deg)'"></div>
+        </div>
+        <span class="stat-unit">{{ bearingLabel(bearing()) }}</span>
+      </div>
+      <div class="stat-chip rm-card">
+        <span class="stat-value">{{ members().length }}</span>
+        <span class="stat-unit">riders</span>
+      </div>
+    </div>
+
+    <!-- Mapbox map -->
+    <div class="map-wrap">
+      <div #mapContainer class="mapbox-container"></div>
+      @if (!inGroup()) {
+        <div class="map-overlay">
+          <p>Join a group to see member locations on the map</p>
+        </div>
+      }
+    </div>
+
+    <!-- Member list -->
+    @if (members().length > 0) {
+      <div class="member-section animate-fade-in">
+        <div class="rm-section-label">Group Riders</div>
+        <div class="member-list">
+          @for (m of members(); track m.id) {
+            <div
+              class="rm-card member-row rm-card--clickable"
+              [class.member-row--selected]="selectedRider?.id === m.id"
+              (click)="selectRider(m)"
+            >
+              <div class="rm-avatar">{{ m.avatarInitials }}</div>
+              <div class="member-info">
+                <div class="member-name">
+                  {{ m.name }}
+                  @if (m.role === 'leader') {
+                    <span class="leader-pip">L</span>
+                  }
+                </div>
+                <div class="member-callsign">{{ m.callsign }}</div>
+              </div>
+              <div class="member-right">
+                @if (getRiderDistance(m); as dist) {
+                  <div class="rm-stat">
+                    <div class="rm-stat__value" style="font-size:0.95rem">{{ formatDist(dist) }}</div>
+                    <div class="rm-stat__label">Away</div>
+                  </div>
+                }
+                <span class="rm-dot" [class]="'rm-dot--' + (m.status === 'online' ? 'green' : m.status === 'away' ? 'orange' : 'muted')"></span>
+              </div>
+            </div>
+          }
+        </div>
+      </div>
+    } @else {
+      <div class="empty-state animate-fade-in">
+        <p>No group members yet. Start or join a ride group.</p>
+      </div>
+    }
+  </div>
+</div>

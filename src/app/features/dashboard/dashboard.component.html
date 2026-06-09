@@ -1,0 +1,136 @@
+<div class="rm-screen">
+  <!-- Header -->
+  <header class="rm-header">
+    <div class="brand">
+      <svg width="28" height="28" viewBox="0 0 32 32" fill="none">
+        <circle cx="16" cy="16" r="14" fill="var(--rm-orange)" opacity="0.15"/>
+        <circle cx="16" cy="16" r="8"  fill="var(--rm-orange)" opacity="0.3"/>
+        <circle cx="16" cy="16" r="3"  fill="var(--rm-orange)"/>
+        <path d="M16 2 L16 8 M16 24 L16 30 M2 16 L8 16 M24 16 L30 16"
+              stroke="var(--rm-orange)" stroke-width="1.5" stroke-linecap="round" opacity="0.6"/>
+      </svg>
+      <span class="brand__name">RideMesh</span>
+    </div>
+    <div class="header-right">
+      @if (hasAlert()) {
+        <a routerLink="/emergency" class="alert-chip">
+          <span class="rm-dot rm-dot--red"></span>
+          {{ alertCount() }} Alert{{ alertCount() > 1 ? 's' : '' }}
+        </a>
+      }
+      <div class="battery-chip">
+        <svg width="14" height="14" viewBox="0 0 24 24" fill="var(--rm-green)">
+          <path d="M15.67 4H14V2h-4v2H8.33C7.6 4 7 4.6 7 5.33v15.33C7 21.4 7.6 22 8.33 22h7.33c.74 0 1.34-.6 1.34-1.33V5.33C17 4.6 16.4 4 15.67 4z"/>
+        </svg>
+        {{ self().battery }}%
+      </div>
+    </div>
+  </header>
+
+  <div class="rm-body">
+    <!-- Status Banner -->
+    @if (group()) {
+      <div class="status-banner status-banner--active animate-slide-up">
+        <div class="flex items-center gap-sm">
+          <span class="rm-dot rm-dot--green"></span>
+          <span class="status-banner__label">{{ group()!.name }}</span>
+        </div>
+        <span class="rm-badge rm-badge--green">{{ online() }} Online</span>
+      </div>
+    } @else {
+      <div class="status-banner animate-slide-up">
+        <div class="flex items-center gap-sm">
+          <span class="rm-dot rm-dot--muted"></span>
+          <span class="status-banner__label">No Active Group</span>
+        </div>
+        <a routerLink="/groups" class="rm-btn rm-btn--primary" style="min-height:36px;font-size:0.8rem;padding:0 12px">Start Ride</a>
+      </div>
+    }
+
+    <!-- Stats Row -->
+    <div class="stats-row animate-slide-up">
+      <div class="rm-card stat-card">
+        <div class="rm-stat__value">{{ online() }}</div>
+        <div class="rm-stat__label">Online</div>
+      </div>
+      <div class="rm-card stat-card">
+        <div class="rm-stat__value">{{ group() ? (group()!.memberIds.length) : 0 }}</div>
+        <div class="rm-stat__label">In Group</div>
+      </div>
+      <div class="rm-card stat-card">
+        <div class="rm-stat__value">{{ location() ? 'ON' : 'OFF' }}</div>
+        <div class="rm-stat__label">GPS</div>
+      </div>
+      <div class="rm-card stat-card">
+        <div class="rm-stat__value">{{ location$.speed() }} km/h</div>
+        <div class="rm-stat__label">Speed</div>
+      </div>
+    </div>
+
+    <!-- Quick Actions -->
+    <div class="rm-section-label mt-lg">Quick Actions</div>
+    <div class="quick-grid animate-slide-up">
+      @for (action of quickActions; track action.path) {
+        <a [routerLink]="action.path" class="quick-card rm-card rm-card--clickable" [class]="'quick-card--' + action.color">
+          <div class="quick-card__icon">
+            @switch (action.icon) {
+              @case ('radar') {
+                <svg width="28" height="28" viewBox="0 0 24 24" fill="currentColor">
+                  <path d="M12 2C6.48 2 2 6.48 2 12s4.48 10 10 10 10-4.48 10-10S17.52 2 12 2zm-1 17.93V18c0-.55.45-1 1-1s1 .45 1 1v1.93C9.27 19.68 7 17.06 7 14c0-2.76 2.24-5 5-5s5 2.24 5 5c0 3.06-2.27 5.68-6 5.93zM12 11c-1.66 0-3 1.34-3 3s1.34 3 3 3 3-1.34 3-3-1.34-3-3-3z"/>
+                </svg>
+              }
+              @case ('group') {
+                <svg width="28" height="28" viewBox="0 0 24 24" fill="currentColor">
+                  <path d="M16 11c1.66 0 2.99-1.34 2.99-3S17.66 5 16 5c-1.66 0-3 1.34-3 3s1.34 3 3 3zm-8 0c1.66 0 2.99-1.34 2.99-3S9.66 5 8 5C6.34 5 5 6.34 5 8s1.34 3 3 3zm0 2c-2.33 0-7 1.17-7 3.5V19h14v-2.5c0-2.33-4.67-3.5-7-3.5zm8 0c-.29 0-.62.02-.97.05 1.16.84 1.97 1.97 1.97 3.45V19h6v-2.5c0-2.33-4.67-3.5-7-3.5z"/>
+                </svg>
+              }
+              @case ('mic') {
+                <svg width="28" height="28" viewBox="0 0 24 24" fill="currentColor">
+                  <path d="M12 14c1.66 0 2.99-1.34 2.99-3L15 5c0-1.66-1.34-3-3-3S9 3.34 9 5v6c0 1.66 1.34 3 3 3zm5.3-3c0 3-2.54 5.1-5.3 5.1S6.7 14 6.7 11H5c0 3.41 2.72 6.23 6 6.72V21h2v-3.28c3.28-.48 6-3.3 6-6.72h-1.7z"/>
+                </svg>
+              }
+              @case ('nav') {
+                <svg width="28" height="28" viewBox="0 0 24 24" fill="currentColor">
+                  <path d="M21.71 11.29l-9-9a1 1 0 0 0-1.42 0l-9 9a1 1 0 0 0 0 1.42l9 9a1 1 0 0 0 1.42 0l9-9a1 1 0 0 0 0-1.42zM14 14.5V12h-4v3H8v-4a1 1 0 0 1 1-1h5V7.5l3.5 3.5-3.5 3.5z"/>
+                </svg>
+              }
+            }
+          </div>
+          <span class="quick-card__label">{{ action.label }}</span>
+        </a>
+      }
+    </div>
+
+    <!-- Nearby Riders -->
+    @if (riders().length > 0) {
+      <div class="rm-section-label mt-lg">Nearby Riders</div>
+      <div class="riders-list animate-slide-up">
+        @for (rider of riders(); track rider.id) {
+          <div class="rm-card rider-row">
+            <div class="rm-avatar">{{ rider.avatarInitials }}</div>
+            <div class="rider-info">
+              <div class="rider-name">{{ rider.name }}</div>
+              <div class="rider-callsign">{{ rider.callsign }}</div>
+            </div>
+            <div class="rider-meta">
+              <span class="rm-dot" [class]="'rm-dot--' + (rider.status === 'online' ? 'green' : rider.status === 'away' ? 'orange' : 'muted')"></span>
+              @if (rider.distance) {
+                <span class="rider-dist">
+                  {{ rider.distance < 1000 ? rider.distance + 'm' : (rider.distance/1000).toFixed(1) + 'km' }}
+                </span>
+              }
+            </div>
+          </div>
+        }
+      </div>
+    } @else {
+      <div class="empty-state animate-fade-in">
+        <svg width="48" height="48" viewBox="0 0 24 24" fill="var(--text-muted)">
+          <path d="M12 2C6.48 2 2 6.48 2 12s4.48 10 10 10 10-4.48 10-10S17.52 2 12 2zm-1 17.93V18c0-.55.45-1 1-1s1 .45 1 1v1.93C9.27 19.68 7 17.06 7 14c0-2.76 2.24-5 5-5s5 2.24 5 5c0 3.06-2.27 5.68-6 5.93zM12 11c-1.66 0-3 1.34-3 3s1.34 3 3 3 3-1.34 3-3-1.34-3-3-3z"/>
+        </svg>
+        <p>No riders nearby</p>
+        <a routerLink="/discovery" class="rm-btn rm-btn--secondary mt-md">Scan for Riders</a>
+      </div>
+    }
+  </div>
+</div>

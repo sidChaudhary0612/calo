@@ -1,0 +1,176 @@
+<div class="rm-screen">
+  <header class="rm-header">
+    <span class="rm-header__title">Push-To-Talk</span>
+    @if (inGroup()) {
+      <span class="rm-header__badge active">
+        <span class="rm-dot rm-dot--green"></span>
+        {{ members().length }} riders
+      </span>
+    } @else {
+      <span class="rm-header__badge">No Group</span>
+    }
+  </header>
+
+  <div class="ptt-body">
+
+    <!-- No-group notice -->
+    @if (!inGroup()) {
+      <div class="no-group-notice animate-fade-in">
+        <svg width="28" height="28" viewBox="0 0 24 24" fill="var(--text-muted)">
+          <path d="M12 2C6.48 2 2 6.48 2 12s4.48 10 10 10 10-4.48 10-10S17.52 2 12 2zm1 15h-2v-2h2v2zm0-4h-2V7h2v6z"/>
+        </svg>
+        <span>Join a group to broadcast.<br>PTT works in solo mode too — only nearby riders will hear you.</span>
+        <a routerLink="/groups" class="rm-btn rm-btn--secondary" style="min-height:40px;font-size:0.8rem;padding:0 16px;">
+          Find a Group
+        </a>
+      </div>
+    }
+
+    <!-- Receiving banner -->
+    @if (state() === 'receiving') {
+      <div class="rx-banner animate-slide-up">
+        <div class="rx-waveform">
+          @for (i of [1,2,3,4,5,6,7,8]; track i) {
+            <div class="rx-bar" [style.animation-delay.ms]="i * 75"></div>
+          }
+        </div>
+        <div class="rx-info">
+          <span class="rx-name">{{ speakerName() }}</span>
+          <span class="rx-label">speaking...</span>
+        </div>
+      </div>
+    }
+
+    <!-- PTT button -->
+    <div class="ptt-center">
+      <div class="ptt-ring-outer"
+           [class.ptt-ring-outer--tx]="state() === 'transmitting'"
+           [class.ptt-ring-outer--rx]="state() === 'receiving'">
+        <div class="ptt-ring-inner"
+             [class.ptt-ring-inner--tx]="state() === 'transmitting'">
+          <button
+            class="ptt-btn"
+            [class.ptt-btn--transmitting]="state() === 'transmitting'"
+            [class.ptt-btn--receiving]="state() === 'receiving'"
+            [class.ptt-btn--muted]="isMuted()"
+            [disabled]="isMuted()"
+            (pointerdown)="onPttDown()"
+            (pointerup)="onPttUp()"
+            (pointerleave)="onPttUp()"
+            (pointercancel)="onPttUp()"
+          >
+            @if (isMuted()) {
+              <svg width="38" height="38" viewBox="0 0 24 24" fill="currentColor">
+                <path d="M19 11h-1.7c0 .74-.16 1.43-.43 2.05l1.23 1.23c.56-.98.9-2.09.9-3.28zm-4.02.17c0-.06.02-.11.02-.17V5c0-1.66-1.34-3-3-3S9 3.34 9 5v.18l5.98 5.99zM4.27 3L3 4.27l6.01 6.01V11c0 1.66 1.33 3 2.99 3 .22 0 .44-.03.65-.08l1.66 1.66c-.71.33-1.5.52-2.31.52-2.76 0-5.3-2.1-5.3-5.1H5c0 3.41 2.72 6.23 6 6.72V21h2v-3.28c.91-.13 1.77-.45 2.54-.9L19.73 21 21 19.73 4.27 3z"/>
+              </svg>
+            } @else {
+              <svg width="38" height="38" viewBox="0 0 24 24" fill="currentColor">
+                <path d="M12 14c1.66 0 2.99-1.34 2.99-3L15 5c0-1.66-1.34-3-3-3S9 3.34 9 5v6c0 1.66 1.34 3 3 3zm5.3-3c0 3-2.54 5.1-5.3 5.1S6.7 14 6.7 11H5c0 3.41 2.72 6.23 6 6.72V21h2v-3.28c3.28-.48 6-3.3 6-6.72h-1.7z"/>
+              </svg>
+            }
+          </button>
+        </div>
+      </div>
+
+      <!-- State label + TX timer -->
+      <div class="ptt-label-row">
+        @switch (state()) {
+          @case ('transmitting') {
+            <span class="ptt-label ptt-label--tx">TRANSMITTING</span>
+            <span class="tx-timer">{{ formatTx(txMs()) }}</span>
+          }
+          @case ('receiving') {
+            <span class="ptt-label ptt-label--rx">RECEIVING</span>
+          }
+          @default {
+            <span class="ptt-label ptt-label--idle">{{ isMuted() ? 'MUTED — TAP TO UNMUTE' : 'HOLD TO TALK' }}</span>
+          }
+        }
+      </div>
+    </div>
+
+    <!-- Controls -->
+    <div class="controls-row">
+      <!-- Volume -->
+      <div class="control-card rm-card">
+        <div class="control-label">Volume</div>
+        <div class="volume-row">
+          <button class="vol-btn rm-btn rm-btn--ghost rm-btn--icon" (click)="adjustVolume(-10)">
+            <svg width="18" height="18" viewBox="0 0 24 24" fill="currentColor">
+              <path d="M18.5 12A4.5 4.5 0 0 0 14 7.5v9A4.5 4.5 0 0 0 18.5 12zM5 9v6h4l5 5V4L9 9H5z"/>
+            </svg>
+          </button>
+          <div class="volume-bar" (click)="adjustVolume(0)">
+            <div class="volume-fill" [style.width.%]="volume()"></div>
+            <div class="volume-thumb" [style.left.%]="volume()"></div>
+          </div>
+          <button class="vol-btn rm-btn rm-btn--ghost rm-btn--icon" (click)="adjustVolume(10)">
+            <svg width="18" height="18" viewBox="0 0 24 24" fill="currentColor">
+              <path d="M3 9v6h4l5 5V4L7 9H3zm13.5 3A4.5 4.5 0 0 0 14 7.5v9A4.5 4.5 0 0 0 16.5 12zM14 3.23v2.06c2.89.86 5 3.54 5 6.71s-2.11 5.85-5 6.71v2.06c4.01-.91 7-4.49 7-8.77s-2.99-7.86-7-8.77z"/>
+            </svg>
+          </button>
+        </div>
+        <span class="volume-pct">{{ volume() }}%</span>
+      </div>
+
+      <!-- Mute toggle -->
+      <button
+        class="rm-card control-card control-card--btn"
+        [class.control-card--muted]="isMuted()"
+        (click)="toggleMute()"
+      >
+        <div class="control-icon">
+          @if (isMuted()) {
+            <svg width="22" height="22" viewBox="0 0 24 24" fill="currentColor">
+              <path d="M19 11h-1.7c0 .74-.16 1.43-.43 2.05l1.23 1.23c.56-.98.9-2.09.9-3.28zm-4.02.17c0-.06.02-.11.02-.17V5c0-1.66-1.34-3-3-3S9 3.34 9 5v.18l5.98 5.99zM4.27 3L3 4.27l6.01 6.01V11c0 1.66 1.33 3 2.99 3 .22 0 .44-.03.65-.08l1.66 1.66c-.71.33-1.5.52-2.31.52-2.76 0-5.3-2.1-5.3-5.1H5c0 3.41 2.72 6.23 6 6.72V21h2v-3.28c.91-.13 1.77-.45 2.54-.9L19.73 21 21 19.73 4.27 3z"/>
+            </svg>
+          } @else {
+            <svg width="22" height="22" viewBox="0 0 24 24" fill="currentColor">
+              <path d="M12 14c1.66 0 2.99-1.34 2.99-3L15 5c0-1.66-1.34-3-3-3S9 3.34 9 5v6c0 1.66 1.34 3 3 3zm5.3-3c0 3-2.54 5.1-5.3 5.1S6.7 14 6.7 11H5c0 3.41 2.72 6.23 6 6.72V21h2v-3.28c3.28-.48 6-3.3 6-6.72h-1.7z"/>
+            </svg>
+          }
+        </div>
+        <div class="control-label">{{ isMuted() ? 'Unmute' : 'Mute' }}</div>
+      </button>
+    </div>
+
+    <!-- Group member avatars -->
+    @if (members().length > 0) {
+      <div class="members-strip">
+        @for (m of members(); track m.id) {
+          <div class="member-chip">
+            <div class="member-avatar" [class.member-avatar--speaking]="speakerName() === m.name">
+              {{ m.avatarInitials }}
+            </div>
+            <span class="rm-dot"
+              [class]="'rm-dot--' + (m.status === 'online' ? 'green' : 'muted')"
+              style="width:7px;height:7px;position:absolute;bottom:0;right:0;">
+            </span>
+          </div>
+        }
+      </div>
+    }
+
+    <!-- Speaker history log -->
+    @if (speakerLog().length > 0) {
+      <div class="speaker-log animate-fade-in">
+        <div class="rm-section-label">Recent</div>
+        @for (entry of speakerLog(); track entry.startedAt) {
+          <div class="log-row">
+            <span class="log-name">{{ entry.name }}</span>
+            <span class="log-time">{{ formatLogTime(entry.startedAt) }}</span>
+          </div>
+        }
+      </div>
+    }
+
+    <!-- Dev helper -->
+    <button
+      class="rm-btn rm-btn--ghost"
+      style="align-self:center;font-size:0.72rem;min-height:36px;"
+      (click)="simulateIncoming()"
+    >
+      Simulate Incoming
+    </button>
+  </div>
+</div>

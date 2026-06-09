@@ -1,0 +1,104 @@
+<div class="rm-screen">
+  <header class="rm-header">
+    <span class="rm-header__title">Rider Discovery</span>
+    <span class="rm-header__badge" [class.active]="connected()">
+      <span class="rm-dot" [class]="connected() ? 'rm-dot--green' : 'rm-dot--muted'"></span>
+      {{ connected() ? 'Mesh Active' : 'Offline' }}
+    </span>
+  </header>
+
+  <div class="rm-body">
+    <!-- Radar Visualizer -->
+    <div class="radar-container">
+      <div class="radar" [class.radar--scanning]="isScanning()">
+        <div class="radar__ring radar__ring--1"></div>
+        <div class="radar__ring radar__ring--2"></div>
+        <div class="radar__ring radar__ring--3"></div>
+        <div class="radar__sweep" [class.radar__sweep--active]="isScanning()"></div>
+        <div class="radar__center"></div>
+
+        @for (rider of riders(); track rider.id) {
+          @let pos = blipPos(rider);
+          <div class="radar__blip"
+               [class.radar__blip--online]="rider.status === 'online'"
+               [class.radar__blip--away]="rider.status === 'away'"
+               [style.left.%]="pos.left"
+               [style.top.%]="pos.top">
+            <span class="radar__blip-label">{{ rider.callsign }}</span>
+          </div>
+        }
+      </div>
+
+      <div class="radar-info">
+        <span class="rider-count">{{ riders().length }}</span>
+        <span class="rider-count-label">Riders Found</span>
+      </div>
+    </div>
+
+    <!-- Scan Controls -->
+    <div class="scan-controls">
+      @if (!isScanning()) {
+        <button class="rm-btn rm-btn--primary rm-btn--full" (click)="scan()">
+          <svg width="20" height="20" viewBox="0 0 24 24" fill="currentColor">
+            <path d="M15.5 14h-.79l-.28-.27C15.41 12.59 16 11.11 16 9.5 16 5.91 13.09 3 9.5 3S3 5.91 3 9.5 5.91 16 9.5 16c1.61 0 3.09-.59 4.23-1.57l.27.28v.79l5 4.99L20.49 19l-4.99-5zm-6 0C7.01 14 5 11.99 5 9.5S7.01 5 9.5 5 14 7.01 14 9.5 11.99 14 9.5 14z"/>
+          </svg>
+          Scan for Riders
+        </button>
+      } @else {
+        <button class="rm-btn rm-btn--secondary rm-btn--full" (click)="stop()">
+          <svg width="20" height="20" viewBox="0 0 24 24" fill="currentColor">
+            <path d="M6 6h12v12H6z"/>
+          </svg>
+          Stop Scanning
+        </button>
+      }
+    </div>
+
+    <!-- Rider List -->
+    @if (riders().length > 0) {
+      <div class="rm-section-label mt-lg">Nearby Riders ({{ riders().length }})</div>
+      <div class="rider-list animate-fade-in">
+        @for (rider of riders(); track rider.id) {
+          <div class="rm-card rider-card animate-slide-up">
+            <div class="rm-avatar">{{ rider.avatarInitials }}</div>
+            <div class="rider-details">
+              <div class="rider-name">{{ rider.name }}</div>
+              <div class="rider-meta-row">
+                <span class="callsign">{{ rider.callsign }}</span>
+                <span class="separator">·</span>
+                <span class="distance">{{ formatDist(rider.distance) }}</span>
+                @if (rider.battery != null) {
+                  <span class="separator">·</span>
+                  <span class="battery" [class.battery--low]="rider.battery < 20">
+                    🔋 {{ rider.battery }}%
+                  </span>
+                }
+              </div>
+              <div class="signal-bars">
+                @for (bar of signalBars(rider.signal ?? 0); track $index) {
+                  <div class="signal-bar" [class.signal-bar--active]="bar === 1"></div>
+                }
+              </div>
+            </div>
+            @if (mesh.isInGroup(rider.id)) {
+              <span class="rm-badge rm-badge--green">In Group</span>
+            } @else {
+              <button
+                class="rm-btn rm-btn--secondary invite-btn"
+                [class.invite-btn--sent]="pendingInvite() === rider.id"
+                [disabled]="pendingInvite() === rider.id"
+                (click)="sendInvite(rider)"
+              >
+                {{ pendingInvite() === rider.id ? 'Connecting…' : 'Invite' }}
+              </button>
+            }
+          </div>
+        }
+      </div>
+    } @else if (!isScanning()) {
+      <div class="empty-radar animate-fade-in">
+        <p>Tap <strong>Scan</strong> to discover nearby riders via Wi-Fi Direct and Bluetooth LE.</p>
+      </div>
+    }
+  </div>
+</div>
