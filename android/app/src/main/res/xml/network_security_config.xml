@@ -1,0 +1,16 @@
+<?xml version="1.0" encoding="utf-8"?>
+<network-security-config>
+    <!-- Allow cleartext HTTP to OSM tile mirrors and Stadia Maps -->
+    <domain-config cleartextTrafficPermitted="true">
+        <domain includeSubdomains="true">tile.openstreetmap.org</domain>
+        <domain includeSubdomains="true">tiles.stadiamaps.com</domain>
+        <domain includeSubdomains="true">nominatim.openstreetmap.org</domain>
+    </domain-config>
+
+    <!-- Everything else must use HTTPS -->
+    <base-config cleartextTrafficPermitted="false">
+        <trust-anchors>
+            <certificates src="system" />
+        </trust-anchors>
+    </base-config>
+</network-security-config>

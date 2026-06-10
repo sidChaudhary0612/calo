@@ -4,9 +4,8 @@ import type { BleDevice, BlePluginDefinition } from './ble.plugin';
 // Shared registry so BLE and Wi-Fi stubs emit the same generated peers
 export interface SimulatedPeer {
   address:    string;   // canonical MAC
-  deviceName: string;   // e.g. "RideMesh-7F3A"
+  deviceName: string;   // e.g. "CALO-7F3A"
   fullName:   string;   // e.g. "Rider 7F3A"
-  callsign:   string;   // e.g. "ALPHA-3"
   rssi:       number;
   battery:    number;
   status:     'online' | 'away' | 'offline';
@@ -26,13 +25,6 @@ function randomHex(len: number): string {
 
 function randomMac(): string {
   return Array.from({ length: 6 }, () => randomHex(2)).join(':');
-}
-
-function randomCallsign(): string {
-  const prefixes = ['ALPHA', 'BRAVO', 'DELTA', 'ECHO', 'FOXTROT', 'GHOST', 'HAWK', 'IRON', 'JADE', 'KILO'];
-  const prefix = prefixes[Math.floor(Math.random() * prefixes.length)];
-  const num    = Math.floor(Math.random() * 9) + 1;
-  return `${prefix}-${num}`;
 }
 
 function randomRssi(): number {
@@ -59,9 +51,8 @@ export function buildRegistry(): void {
 
     peerRegistry.push({
       address:   addr,
-      deviceName: `RideMesh-${tag}`,
+      deviceName: `CALO-${tag}`,
       fullName:   `Rider ${tag}`,
-      callsign:   randomCallsign(),
       rssi,
       battery:    20 + Math.floor(Math.random() * 80),
       status:     Math.random() < 0.8 ? 'online' : 'away',
@@ -102,10 +93,9 @@ export class BleWeb extends WebPlugin implements BlePluginDefinition {
           deviceName:    peer.deviceName,
           rssi:          peer.rssi,
           payload: JSON.stringify({
-            name:     peer.fullName,
-            callsign: peer.callsign,
-            status:   peer.status,
-            battery:  peer.battery,
+            name:    peer.fullName,
+            status:  peer.status,
+            battery: peer.battery,
           }),
         };
 

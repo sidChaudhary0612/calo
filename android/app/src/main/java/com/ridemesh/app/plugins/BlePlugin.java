@@ -49,18 +49,19 @@ import java.util.UUID;
 public class BlePlugin extends Plugin {
 
     private static final String TAG         = "BlePlugin";
-    // Service UUID that all RideMesh devices advertise
+    // Service UUID that all CALO devices advertise
     private static final String SERVICE_UUID = "0000FEED-0000-1000-8000-00805F9B34FB";
     // Characteristic for rider beacon payload (name + callsign + status)
     private static final String BEACON_CHAR  = "0000BEA0-0000-1000-8000-00805F9B34FB";
 
-    private BluetoothAdapter    btAdapter;
-    private BluetoothLeScanner  leScanner;
+    private BluetoothAdapter      btAdapter;
+    private BluetoothLeScanner    leScanner;
     private BluetoothLeAdvertiser leAdvertiser;
-    private ScanCallback        scanCallback;
-    private AdvertiseCallback   advertiseCallback;
-    private boolean             isScanning    = false;
-    private boolean             isAdvertising = false;
+    private ScanCallback          scanCallback;
+    private AdvertiseCallback     advertiseCallback;
+    private boolean               isScanning    = false;
+    private boolean               isAdvertising = false;
+    private byte[]                cachedBeaconPayload = new byte[0];
 
     // ─── Lifecycle ────────────────────────────────────────────────────────────
 
@@ -136,17 +137,20 @@ public class BlePlugin extends Plugin {
             .setTimeout(0)
             .build();
 
-        byte[] data = payload != null ? payload.getBytes(StandardCharsets.UTF_8) : new byte[0];
-        // Truncate to 20 bytes (BLE advertisement payload limit)
-        if (data.length > 20) {
-            byte[] trimmed = new byte[20];
-            System.arraycopy(data, 0, trimmed, 0, 20);
-            data = trimmed;
-        }
+        // BLE advertisement can only carry up to ~20 bytes of service data.
+        // We include a truncated "presence" flag in the advert and store the
+        // full payload in a GATT characteristic so connecting devices can read it.
+        byte[] fullData = payload != null ? payload.getBytes(StandardCharsets.UTF_8) : new byte[0];
+        byte[] advBytes = fullData.length > 20
+            ? java.util.Arrays.copyOf(fullData, 20)
+            : fullData;
+
+        // Cache full payload for GATT reads
+        cachedBeaconPayload = fullData;
 
         AdvertiseData advData = new AdvertiseData.Builder()
             .addServiceUuid(ParcelUuid.fromString(SERVICE_UUID))
-            .addServiceData(ParcelUuid.fromString(SERVICE_UUID), data)
+            .addServiceData(ParcelUuid.fromString(SERVICE_UUID), advBytes)
             .setIncludeDeviceName(false)
             .build();
 

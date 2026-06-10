@@ -71,9 +71,27 @@
   min-height: 200px;
 }
 
-.mapbox-container {
+.map-container {
   position: absolute;
   inset: 0;
+}
+
+.map-offline-badge {
+  position: absolute;
+  top: var(--space-sm);
+  left: var(--space-sm);
+  z-index: 10;
+  display: flex;
+  align-items: center;
+  gap: 5px;
+  background: var(--bg-overlay);
+  border: 1px solid var(--border);
+  border-radius: var(--radius-full);
+  padding: 4px 10px;
+  font-size: 0.7rem;
+  font-weight: 600;
+  color: var(--text-muted);
+  backdrop-filter: blur(4px);
 }
 
 .map-overlay {
@@ -132,14 +150,6 @@
   display: flex;
   align-items: center;
   gap: var(--space-sm);
-}
-
-.member-callsign {
-  font-size: 0.72rem;
-  color: var(--rm-orange);
-  font-weight: 700;
-  letter-spacing: 0.04em;
-  margin-top: 2px;
 }
 
 .member-right {

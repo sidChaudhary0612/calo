@@ -1,19 +1,28 @@
-import { Component, computed, signal } from '@angular/core';
+import { Component, computed, signal, OnDestroy } from '@angular/core';
+import { CommonModule } from '@angular/common';
 import { MeshService } from '../../core/services/mesh.service';
 import { Rider } from '../../core/models/rider.model';
 
 @Component({
   selector: 'app-discovery',
+  standalone: true,
+  imports: [CommonModule],
   templateUrl: './discovery.component.html',
   styleUrl: './discovery.component.scss',
 })
-export class DiscoveryComponent {
-  readonly isScanning   = computed(() => this.mesh.isScanning());
-  readonly riders       = computed(() => this.mesh.nearbyRiders());
-  readonly connected    = computed(() => this.mesh.meshConnected());
+export class DiscoveryComponent implements OnDestroy {
+  readonly isScanning    = computed(() => this.mesh.isScanning());
+  readonly riders        = computed(() => this.mesh.nearbyRiders());
+  readonly connected     = computed(() => this.mesh.meshConnected());
+  readonly self          = computed(() => this.mesh.selfRider());
+  readonly onlineCount   = computed(() => this.riders().filter(r => r.status === 'online').length);
   readonly pendingInvite = signal('');
 
   constructor(readonly mesh: MeshService) {}
+
+  ngOnDestroy(): void {
+    // Leave scan running — stopped only when user taps Stop
+  }
 
   scan(): void { this.mesh.startScan(); }
   stop(): void { this.mesh.stopScan(); }
@@ -29,26 +38,56 @@ export class DiscoveryComponent {
 
   signalBars(sig: number): number[] {
     const bars = Math.round((sig / 100) * 4);
-    return Array(4).fill(0).map((_, i) => i < bars ? 1 : 0);
+    return Array(4).fill(0).map((_, i) => (i < bars ? 1 : 0));
   }
 
-  /** Convert signalAngle (0-359) + signal strength (0-100) → radar x/y position.
-   *  Weaker signal = further from centre (less power = further ring).
-   *  Returns left%, top% so the blip sits inside the radar circle. */
+  statusDotClass(status: string): string {
+    switch (status) {
+      case 'online':  return 'rm-dot--green';
+      case 'away':    return 'rm-dot--cyan';
+      case 'offline': return 'rm-dot--muted';
+      default:        return 'rm-dot--muted';
+    }
+  }
+
+  statusLabel(status: string): string {
+    switch (status) {
+      case 'online':  return 'Online';
+      case 'away':    return 'Away';
+      case 'offline': return 'Offline';
+      default:        return 'Unknown';
+    }
+  }
+
+  /** Map signalAngle (0-359) + signal strength (0-100) → radar blip position (left%, top%). */
   blipPos(rider: Rider): { left: number; top: number } {
-    const angle = (rider.signalAngle ?? 0) * Math.PI / 180;
-    const sig   = rider.signal ?? 50;
-    // Stronger signal → closer to centre; weaker → outer ring
-    // Map signal 100→0% radius, 0→42% radius (just inside circle boundary)
+    const angle  = (rider.signalAngle ?? 0) * Math.PI / 180;
+    const sig    = rider.signal ?? 50;
     const radius = 10 + ((100 - sig) / 100) * 32;
-    // Radar circle centre is at 50%, 50%
-    const left = 50 + radius * Math.cos(angle);
-    const top  = 50 + radius * Math.sin(angle);
-    return { left, top };
+    return {
+      left: 50 + radius * Math.cos(angle),
+      top:  50 + radius * Math.sin(angle),
+    };
   }
 
   formatDist(m: number | undefined): string {
     if (m == null) return '—';
     return m < 1000 ? Math.round(m) + 'm' : (m / 1000).toFixed(1) + 'km';
+  }
+
+  formatSignal(sig: number | undefined): string {
+    if (sig == null) return '—';
+    return sig + '%';
+  }
+
+  formatSpeed(s: number | undefined): string {
+    if (s == null) return '—';
+    return s.toFixed(0) + ' km/h';
+  }
+
+  batteryIcon(pct: number): string {
+    if (pct >= 80) return '🔋';
+    if (pct >= 40) return '🔋';
+    return '🪫';
   }
 }

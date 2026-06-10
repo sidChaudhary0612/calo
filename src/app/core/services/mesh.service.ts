@@ -4,10 +4,10 @@ import { WifiDirect, WifiP2pPeer } from '../plugins/wifi-direct.plugin';
 import { BlePlugin, BleDevice } from '../plugins/ble.plugin';
 import { P2pSocket } from '../plugins/p2p-socket.plugin';
 import { DataBusService } from './data-bus.service';
+import { SettingsService } from './settings.service';
 
 interface BeaconPayload {
   name:      string;
-  callsign:  string;
   status:    'online' | 'away' | 'offline';
   battery?:  number;
   groupId?:  string;
@@ -31,10 +31,14 @@ export class MeshService implements OnDestroy {
   readonly activeGroup   = signal<RideGroup | null>(null);
   readonly isScanning    = signal(false);
   readonly meshConnected = signal(false);
-  readonly selfRider     = signal<Rider>({
-    id: 'self', name: 'You', callsign: 'RIDER-0', avatarInitials: 'YO',
-    status: 'online', role: 'solo', battery: 88, signal: 100,
-  });
+  private _settings = inject(SettingsService);
+  private _bus      = inject(DataBusService);
+
+  readonly selfRider = signal<Rider>((() => {
+    const name = this._settings.riderName() || 'Rider';
+    const initials = name.split(' ').map((w: string) => w[0]).join('').substring(0, 2).toUpperCase();
+    return { id: 'self', name, avatarInitials: initials, status: 'online', role: 'solo', battery: 88, signal: 100 };
+  })());
 
   readonly selfId = 'self';
 
@@ -44,7 +48,6 @@ export class MeshService implements OnDestroy {
   private _peers     = new Map<string, PeerRecord>();
   private _listeners: Array<{ remove(): void }> = [];
   private _busTeardown: (() => void) | null = null;
-  private _bus = inject(DataBusService);
 
   constructor() {
     this._busTeardown = this._bus.register('location', (payload, peerAddress) => {
@@ -262,11 +265,10 @@ export class MeshService implements OnDestroy {
 
       const rider: Rider = {
         id:             addr,
-        name:           beacon?.name     ?? rec.deviceName?.replace('ridemesh-', '') ?? 'Unknown',
-        callsign:       beacon?.callsign ?? 'RIDER-?',
+        name:           beacon?.name     ?? rec.deviceName?.replace('calo-', '') ?? 'Unknown',
         avatarInitials: beacon?.name
           ? beacon.name.split(' ').map((w: string) => w[0]).join('').substring(0, 2).toUpperCase()
-          : (rec.deviceName?.replace('ridemesh-', '').substring(0, 2).toUpperCase() ?? '??'),
+          : (rec.deviceName?.replace('calo-', '').substring(0, 2).toUpperCase() ?? '??'),
         status:         beacon?.status   ?? 'offline',
         role:           'member',
         battery:        beacon?.battery,
@@ -305,11 +307,10 @@ export class MeshService implements OnDestroy {
   private async _advertise(): Promise<void> {
     const self = this.selfRider();
     const payload: BeaconPayload = {
-      name:     self.name,
-      callsign: self.callsign,
-      status:   self.status,
-      battery:  self.battery,
-      groupId:  this.activeGroup()?.id,
+      name:    self.name,
+      status:  self.status,
+      battery: self.battery,
+      groupId: this.activeGroup()?.id,
     };
     await BlePlugin.startAdvertise({ payload: JSON.stringify(payload) }).catch(() => {});
   }

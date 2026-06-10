@@ -1,3 +1,5 @@
+/* ─── Radar ──────────────────────────────────────────────────────────────── */
+
 .radar-container {
   display: flex;
   flex-direction: column;
@@ -26,7 +28,7 @@
 }
 
 .radar--scanning .radar__ring {
-  border-color: rgba(255, 107, 26, 0.2);
+  border-color: rgba(107, 70, 255, 0.2);
   animation: ring-pulse 2s ease-in-out infinite;
 
   &--2 { animation-delay: 0.3s; }
@@ -45,7 +47,7 @@
   top: 0;
   left: 50%;
   transform-origin: bottom left;
-  background: conic-gradient(from 0deg, transparent 70%, rgba(255, 107, 26, 0.35) 100%);
+  background: conic-gradient(from 0deg, transparent 70%, rgba(107, 70, 255, 0.35) 100%);
   border-radius: 0 100% 0 0;
   display: none;
 
@@ -63,9 +65,9 @@
 .radar__center {
   width: 10px;
   height: 10px;
-  background: var(--rm-orange);
+  background: var(--rm-primary);
   border-radius: 50%;
-  box-shadow: 0 0 12px var(--rm-orange);
+  box-shadow: 0 0 12px var(--rm-primary);
   z-index: 2;
 }
 
@@ -73,20 +75,24 @@
   position: absolute;
   width: 10px;
   height: 10px;
-  background: var(--rm-green);
+  background: var(--text-muted);
   border-radius: 50%;
-  box-shadow: 0 0 8px var(--rm-green);
   animation: ping 1.8s ease-out infinite;
   transform: translate(-50%, -50%);
-
-  &--away {
-    background: var(--rm-orange);
-    box-shadow: 0 0 8px var(--rm-orange);
-  }
 
   &--online {
     background: var(--rm-green);
     box-shadow: 0 0 8px var(--rm-green);
+  }
+
+  &--away {
+    background: var(--rm-cyan);
+    box-shadow: 0 0 8px var(--rm-cyan);
+  }
+
+  &--offline {
+    background: var(--text-muted);
+    box-shadow: none;
   }
 }
 
@@ -97,20 +103,15 @@
   transform: translateX(-50%);
   font-size: 0.55rem;
   font-weight: 700;
-  color: var(--rm-green);
+  color: var(--text-secondary);
   white-space: nowrap;
   letter-spacing: 0.04em;
 
-  .radar__blip--away & { color: var(--rm-orange); }
+  .radar__blip--online & { color: var(--rm-green); }
+  .radar__blip--away  & { color: var(--rm-cyan);  }
 }
 
-.battery {
-  font-size: 0.72rem;
-  color: var(--text-secondary);
-  font-weight: 600;
-
-  &--low { color: var(--rm-red); }
-}
+/* ─── Radar Info ─────────────────────────────────────────────────────────── */
 
 .radar-info {
   display: flex;
@@ -123,7 +124,7 @@
   font-family: var(--font-display);
   font-size: 2.5rem;
   font-weight: 800;
-  color: var(--rm-orange);
+  color: var(--rm-primary);
   line-height: 1;
 }
 
@@ -135,9 +136,53 @@
   font-weight: 600;
 }
 
-.scan-controls {
-  padding: 0;
+.rider-count-sub {
+  font-size: 0.7rem;
+  color: var(--rm-green);
+  font-weight: 600;
+  letter-spacing: 0.04em;
 }
+
+/* ─── Scan Controls ──────────────────────────────────────────────────────── */
+
+.scan-controls { padding: 0; }
+
+.scanning-btn {
+  position: relative;
+  overflow: hidden;
+}
+
+.scanning-indicator {
+  display: inline-block;
+  width: 8px;
+  height: 8px;
+  border-radius: 50%;
+  background: var(--rm-primary);
+  animation: ping 1.2s ease-out infinite;
+  flex-shrink: 0;
+}
+
+.stop-label {
+  font-size: 0.8rem;
+  color: var(--rm-pink);
+  font-weight: 700;
+}
+
+/* ─── Self card ──────────────────────────────────────────────────────────── */
+
+.self-card {
+  display: flex;
+  align-items: center;
+  gap: var(--space-md);
+}
+
+.self-avatar {
+  background: var(--rm-primary-glow);
+  border-color: var(--rm-primary);
+  color: var(--rm-primary);
+}
+
+/* ─── Rider List ─────────────────────────────────────────────────────────── */
 
 .rider-list {
   display: flex;
@@ -152,26 +197,30 @@
   padding: var(--space-sm) var(--space-md);
 }
 
-.rider-details { flex: 1; }
+.rider-details { flex: 1; min-width: 0; }
 
 .rider-name {
   font-weight: 600;
   font-size: 0.95rem;
   color: var(--text-primary);
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
 }
 
 .rider-meta-row {
   display: flex;
   align-items: center;
+  flex-wrap: wrap;
   gap: 6px;
   margin-top: 2px;
 }
 
-.callsign {
-  font-size: 0.72rem;
-  color: var(--rm-orange);
-  font-weight: 700;
-  letter-spacing: 0.04em;
+.rider-bottom-row {
+  display: flex;
+  align-items: center;
+  gap: var(--space-sm);
+  margin-top: 4px;
 }
 
 .separator { color: var(--text-muted); font-size: 0.8rem; }
@@ -182,11 +231,20 @@
   font-weight: 600;
 }
 
+.battery {
+  font-size: 0.72rem;
+  color: var(--text-secondary);
+  font-weight: 600;
+
+  &--low { color: var(--rm-red); }
+}
+
+/* ─── Signal Bars ────────────────────────────────────────────────────────── */
+
 .signal-bars {
   display: flex;
   align-items: flex-end;
   gap: 2px;
-  margin-top: 4px;
   height: 12px;
 }
 
@@ -203,10 +261,31 @@
   &--active { background: var(--rm-green); }
 }
 
+/* ─── Rider Status ───────────────────────────────────────────────────────── */
+
+.rider-status {
+  display: inline-flex;
+  align-items: center;
+  gap: 4px;
+  font-size: 0.68rem;
+  color: var(--text-muted);
+  font-weight: 600;
+  text-transform: uppercase;
+  letter-spacing: 0.04em;
+}
+
+.rm-dot--sm {
+  width: 6px;
+  height: 6px;
+}
+
+/* ─── Invite Button ──────────────────────────────────────────────────────── */
+
 .invite-btn {
   min-height: 40px;
   font-size: 0.8rem;
   padding: 0 var(--space-md);
+  flex-shrink: 0;
 
   &--sent {
     background: var(--rm-green-glow);
@@ -215,11 +294,56 @@
   }
 }
 
+/* ─── Empty State ────────────────────────────────────────────────────────── */
+
 .empty-radar {
   text-align: center;
   padding: var(--space-xl);
   color: var(--text-secondary);
   font-size: 0.9rem;
 
-  strong { color: var(--rm-orange); }
+  strong { color: var(--rm-primary); }
 }
+
+.empty-radar__icon {
+  color: var(--text-muted);
+  margin-bottom: var(--space-md);
+  display: flex;
+  justify-content: center;
+}
+
+/* ─── Skeleton Loading ───────────────────────────────────────────────────── */
+
+@keyframes shimmer {
+  0%   { background-position: -200% 0; }
+  100% { background-position:  200% 0; }
+}
+
+.skeleton {
+  background: linear-gradient(90deg, var(--bg-card) 25%, var(--bg-card-hover) 50%, var(--bg-card) 75%);
+  background-size: 200% 100%;
+  animation: shimmer 1.4s infinite;
+  border-radius: var(--radius-sm);
+}
+
+.skeleton--avatar {
+  width: 48px;
+  height: 48px;
+  border-radius: var(--radius-md);
+  flex-shrink: 0;
+}
+
+.skeleton--line {
+  height: 12px;
+  border-radius: var(--radius-full);
+}
+
+.skeleton--line-md { width: 55%; }
+.skeleton--line-sm { width: 35%; }
+
+.rider-card--skeleton {
+  pointer-events: none;
+  opacity: 0.6;
+}
+
+.mt-xs { margin-top: var(--space-xs); }

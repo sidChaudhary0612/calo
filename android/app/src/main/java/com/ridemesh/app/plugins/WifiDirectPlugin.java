@@ -119,6 +119,17 @@ public class WifiDirectPlugin extends Plugin {
 
     // ─── Broadcast Receiver ───────────────────────────────────────────────────
 
+    @Override
+    protected void handleOnResume() {
+        // Re-register receiver after the app comes back to foreground
+        if (receiver == null) registerReceiver();
+    }
+
+    @Override
+    protected void handleOnPause() {
+        unregisterReceiver();
+    }
+
     private void registerReceiver() {
         IntentFilter filter = new IntentFilter();
         filter.addAction(WifiP2pManager.WIFI_P2P_STATE_CHANGED_ACTION);
@@ -149,7 +160,12 @@ public class WifiDirectPlugin extends Plugin {
             }
         };
 
-        getContext().registerReceiver(receiver, filter);
+        // Android 14+ (API 34) requires RECEIVER_NOT_EXPORTED for non-system broadcasts
+        if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.UPSIDE_DOWN_CAKE) {
+            getContext().registerReceiver(receiver, filter, Context.RECEIVER_NOT_EXPORTED);
+        } else {
+            getContext().registerReceiver(receiver, filter);
+        }
     }
 
     private void unregisterReceiver() {

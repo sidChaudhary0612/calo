@@ -1,4 +1,5 @@
 <div class="rm-screen">
+  <!-- Header -->
   <header class="rm-header">
     <span class="rm-header__title">Rider Discovery</span>
     <span class="rm-header__badge" [class.active]="connected()">
@@ -8,7 +9,8 @@
   </header>
 
   <div class="rm-body">
-    <!-- Radar Visualizer -->
+
+    <!-- ─── Radar ──────────────────────────────────────────────────────── -->
     <div class="radar-container">
       <div class="radar" [class.radar--scanning]="isScanning()">
         <div class="radar__ring radar__ring--1"></div>
@@ -19,23 +21,31 @@
 
         @for (rider of riders(); track rider.id) {
           @let pos = blipPos(rider);
-          <div class="radar__blip"
-               [class.radar__blip--online]="rider.status === 'online'"
-               [class.radar__blip--away]="rider.status === 'away'"
-               [style.left.%]="pos.left"
-               [style.top.%]="pos.top">
-            <span class="radar__blip-label">{{ rider.callsign }}</span>
+          <div
+            class="radar__blip"
+            [class.radar__blip--online]="rider.status === 'online'"
+            [class.radar__blip--away]="rider.status === 'away'"
+            [class.radar__blip--offline]="rider.status === 'offline'"
+            [style.left.%]="pos.left"
+            [style.top.%]="pos.top"
+          >
+            <span class="radar__blip-label">{{ rider.name }}</span>
           </div>
         }
       </div>
 
       <div class="radar-info">
         <span class="rider-count">{{ riders().length }}</span>
-        <span class="rider-count-label">Riders Found</span>
+        <span class="rider-count-label">
+          {{ riders().length === 1 ? 'Rider Found' : 'Riders Found' }}
+        </span>
+        @if (onlineCount() > 0) {
+          <span class="rider-count-sub">{{ onlineCount() }} online</span>
+        }
       </div>
     </div>
 
-    <!-- Scan Controls -->
+    <!-- ─── Scan Controls ────────────────────────────────────────────────── -->
     <div class="scan-controls">
       @if (!isScanning()) {
         <button class="rm-btn rm-btn--primary rm-btn--full" (click)="scan()">
@@ -45,41 +55,78 @@
           Scan for Riders
         </button>
       } @else {
-        <button class="rm-btn rm-btn--secondary rm-btn--full" (click)="stop()">
-          <svg width="20" height="20" viewBox="0 0 24 24" fill="currentColor">
-            <path d="M6 6h12v12H6z"/>
-          </svg>
-          Stop Scanning
+        <button class="rm-btn rm-btn--secondary rm-btn--full scanning-btn" (click)="stop()">
+          <span class="scanning-indicator"></span>
+          Scanning…&nbsp;&nbsp;<span class="stop-label">Stop</span>
         </button>
       }
     </div>
 
-    <!-- Rider List -->
+    <!-- ─── Your Profile ─────────────────────────────────────────────────── -->
+    <div class="rm-section-label mt-lg">Your Profile</div>
+    <div class="rm-card self-card">
+      <div class="rm-avatar self-avatar">{{ self().avatarInitials }}</div>
+      <div class="rider-details">
+        <div class="rider-name">{{ self().name }}</div>
+        <div class="rider-meta-row">
+          @if (self().battery != null) {
+            <span class="separator">·</span>
+            <span class="battery" [class.battery--low]="(self().battery ?? 100) < 20">
+              {{ batteryIcon(self().battery!) }} {{ self().battery }}%
+            </span>
+          }
+        </div>
+      </div>
+      <span class="rm-badge" [class]="'rm-badge--' + (self().status === 'online' ? 'green' : self().status === 'away' ? 'cyan' : 'muted')">
+        {{ statusLabel(self().status) }}
+      </span>
+    </div>
+
+    <!-- ─── Nearby Riders ────────────────────────────────────────────────── -->
     @if (riders().length > 0) {
-      <div class="rm-section-label mt-lg">Nearby Riders ({{ riders().length }})</div>
+      <div class="rm-section-label mt-lg">
+        Nearby Riders ({{ riders().length }})
+      </div>
       <div class="rider-list animate-fade-in">
         @for (rider of riders(); track rider.id) {
           <div class="rm-card rider-card animate-slide-up">
             <div class="rm-avatar">{{ rider.avatarInitials }}</div>
+
             <div class="rider-details">
               <div class="rider-name">{{ rider.name }}</div>
               <div class="rider-meta-row">
-                <span class="callsign">{{ rider.callsign }}</span>
-                <span class="separator">·</span>
-                <span class="distance">{{ formatDist(rider.distance) }}</span>
+                @if (rider.distance != null) {
+                  <span class="separator">·</span>
+                  <span class="distance">{{ formatDist(rider.distance) }}</span>
+                }
+
                 @if (rider.battery != null) {
                   <span class="separator">·</span>
                   <span class="battery" [class.battery--low]="rider.battery < 20">
-                    🔋 {{ rider.battery }}%
+                    {{ batteryIcon(rider.battery) }} {{ rider.battery }}%
                   </span>
                 }
               </div>
-              <div class="signal-bars">
-                @for (bar of signalBars(rider.signal ?? 0); track $index) {
-                  <div class="signal-bar" [class.signal-bar--active]="bar === 1"></div>
+
+              <div class="rider-bottom-row">
+                <!-- Signal bars -->
+                @if (rider.signal != null) {
+                  <div class="signal-bars" [title]="formatSignal(rider.signal)">
+                    @for (bar of signalBars(rider.signal); track $index) {
+                      <div class="signal-bar" [class.signal-bar--active]="bar === 1"></div>
+                    }
+                  </div>
                 }
+
+                <!-- Status dot + label -->
+                <span class="rider-status">
+                  <span class="rm-dot rm-dot--sm" [class]="statusDotClass(rider.status)"></span>
+                  {{ statusLabel(rider.status) }}
+                </span>
               </div>
             </div>
+
+            <!-- Action -->
             @if (mesh.isInGroup(rider.id)) {
               <span class="rm-badge rm-badge--green">In Group</span>
             } @else {
@@ -95,10 +142,35 @@
           </div>
         }
       </div>
+
     } @else if (!isScanning()) {
       <div class="empty-radar animate-fade-in">
+        <div class="empty-radar__icon">
+          <svg width="48" height="48" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.5">
+            <circle cx="12" cy="12" r="10"/>
+            <circle cx="12" cy="12" r="6"/>
+            <circle cx="12" cy="12" r="2"/>
+            <line x1="12" y1="2" x2="12" y2="12"/>
+          </svg>
+        </div>
         <p>Tap <strong>Scan</strong> to discover nearby riders via Wi-Fi Direct and Bluetooth LE.</p>
       </div>
+
+    } @else {
+      <!-- Skeleton placeholders while scanning -->
+      <div class="rm-section-label mt-lg">Searching…</div>
+      <div class="rider-list">
+        @for (n of [1,2,3]; track n) {
+          <div class="rm-card rider-card rider-card--skeleton">
+            <div class="skeleton skeleton--avatar"></div>
+            <div class="rider-details">
+              <div class="skeleton skeleton--line skeleton--line-md"></div>
+              <div class="skeleton skeleton--line skeleton--line-sm mt-xs"></div>
+            </div>
+          </div>
+        }
+      </div>
     }
+
   </div>
 </div>

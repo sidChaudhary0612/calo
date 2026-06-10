@@ -1,10 +1,35 @@
 import { Routes } from '@angular/router';
+import { inject } from '@angular/core';
+import { Router } from '@angular/router';
 import { NavShellComponent } from './shared/components/nav-shell/nav-shell.component';
+import { SettingsService } from './core/services/settings.service';
+
+function profileGuard(): boolean {
+  const settings = inject(SettingsService);
+  const router   = inject(Router);
+  if (settings.hasProfile) return true;
+  router.navigate(['/onboarding']);
+  return false;
+}
+
+function onboardingGuard(): boolean {
+  const settings = inject(SettingsService);
+  const router   = inject(Router);
+  if (!settings.hasProfile) return true;
+  router.navigate(['/dashboard']);
+  return false;
+}
 
 export const routes: Routes = [
   {
+    path: 'onboarding',
+    canActivate: [onboardingGuard],
+    loadComponent: () => import('./features/onboarding/onboarding.component').then(m => m.OnboardingComponent),
+  },
+  {
     path: '',
     component: NavShellComponent,
+    canActivate: [profileGuard],
     children: [
       { path: '',           redirectTo: 'dashboard', pathMatch: 'full' },
       { path: 'dashboard',  loadComponent: () => import('./features/dashboard/dashboard.component').then(m => m.DashboardComponent) },

@@ -25,11 +25,28 @@ export class LocationService {
       // Web — proceed anyway
     }
 
+    // Set a demo position quickly so the map has something to show while waiting for GPS.
+    // Will be overwritten by real GPS once it arrives.
+    const demoLoc: RiderLocation = { lat: 37.7749, lng: -122.4194, timestamp: Date.now() };
+    const fallbackTimer = setTimeout(() => {
+      if (!this.currentLocation()) {
+        this.currentLocation.set(demoLoc);
+        this._broadcast(demoLoc);
+      }
+    }, 1500);
+
     try {
       this._watchId = await Geolocation.watchPosition(
         { enableHighAccuracy: true, maximumAge: 2000, timeout: 10000 },
         (pos, err) => {
-          if (err || !pos) return;
+          clearTimeout(fallbackTimer);
+          if (err || !pos) {
+            if (!this.currentLocation()) {
+              this.currentLocation.set(demoLoc);
+              this._broadcast(demoLoc);
+            }
+            return;
+          }
           const loc: RiderLocation = {
             lat:       pos.coords.latitude,
             lng:       pos.coords.longitude,
@@ -45,9 +62,9 @@ export class LocationService {
       );
       this.isTracking.set(true);
     } catch {
-      const loc: RiderLocation = { lat: 37.7749, lng: -122.4194, timestamp: Date.now() };
-      this.currentLocation.set(loc);
-      this._broadcast(loc);
+      clearTimeout(fallbackTimer);
+      this.currentLocation.set(demoLoc);
+      this._broadcast(demoLoc);
     }
   }
 

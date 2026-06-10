@@ -29,13 +29,23 @@
               {
                 "glob": "**/*",
                 "input": "public"
+              },
+              {
+                "glob": "**/*",
+                "input": "src/assets",
+                "output": "assets"
               }
             ],
             "styles": [
+              "node_modules/bootstrap/dist/css/bootstrap.min.css",
+              "src/assets/fonts/montserrat.css",
               "src/styles.scss",
-              "node_modules/mapbox-gl/dist/mapbox-gl.css"
+              "node_modules/maplibre-gl/dist/maplibre-gl.css"
             ],
-            "scripts": []
+            "scripts": [],
+            "allowedCommonJsDependencies": [
+              "maplibre-gl"
+            ]
           },
           "configurations": {
             "production": {

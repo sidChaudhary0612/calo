@@ -17,14 +17,10 @@ interface NavItem {
 })
 export class NavShellComponent {
   readonly navItems: NavItem[] = [
-    { path: '/dashboard',  label: 'Home',      icon: 'home' },
-    { path: '/discovery',  label: 'Find',      icon: 'radar' },
-    { path: '/groups',     label: 'Group',     icon: 'group' },
-    { path: '/ptt',        label: 'Talk',      icon: 'mic' },
-    { path: '/awareness',  label: 'Map',       icon: 'map' },
-    { path: '/navigation', label: 'Nav',       icon: 'nav' },
-    { path: '/music',      label: 'Music',     icon: 'music' },
-    { path: '/emergency',  label: 'SOS',       icon: 'sos' },
+    { path: '/dashboard',  label: 'Home',  icon: 'home' },
+    { path: '/ptt',        label: 'Talk',  icon: 'mic' },
+    { path: '/awareness',  label: 'Map',   icon: 'map' },
+    { path: '/emergency',  label: 'SOS',   icon: 'sos' },
   ];
 
   readonly hasAlert = computed(() =>

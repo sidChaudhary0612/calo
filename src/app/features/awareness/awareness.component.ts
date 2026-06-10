@@ -6,6 +6,9 @@ import { Rider } from '../../core/models/rider.model';
 
 @Component({
   selector: 'app-awareness',
+  standalone: true,
+  imports: [],
+  providers: [MapService],
   templateUrl: './awareness.component.html',
   styleUrl: './awareness.component.scss',
 })
@@ -42,11 +45,20 @@ export class AwarenessComponent implements OnInit, OnDestroy {
 
   async ngOnInit(): Promise<void> {
     await this.loc.start();
-    setTimeout(() => {
-      const loc = this.loc.currentLocation();
-      const center: [number, number] = loc ? [loc.lng, loc.lat] : [-122.4194, 37.7749];
-      this.mapSvc.init(this.mapContainerRef.nativeElement, center, 14);
-    }, 100);
+    // Wait for GPS fix (up to 5s), then init map at real position
+    this._initMapWhenReady(0);
+  }
+
+  private _initMapWhenReady(attempts: number): void {
+    const loc = this.loc.currentLocation();
+    if (loc) {
+      this.mapSvc.init(this.mapContainerRef.nativeElement, [loc.lng, loc.lat], 14);
+      this.mapSvc.updateSelfLocation(loc);
+    } else if (attempts < 25) {
+      setTimeout(() => this._initMapWhenReady(attempts + 1), 200);
+    } else {
+      this.mapSvc.init(this.mapContainerRef.nativeElement, [0, 0], 2);
+    }
   }
 
   ngOnDestroy(): void {

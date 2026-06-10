@@ -4,7 +4,6 @@ export type RiderRole   = 'leader' | 'member' | 'solo';
 export interface Rider {
   id:        string;
   name:      string;
-  callsign:  string;
   avatarInitials: string;
   status:    RiderStatus;
   role:      RiderRole;

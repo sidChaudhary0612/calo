@@ -1,0 +1,36 @@
+<div class="onboarding-screen">
+  <div class="onboarding-card">
+
+    <div class="onboarding-logo">
+      <img src="assets/Images/Calo_logo.png" alt="CALO" />
+    </div>
+
+    <h1 class="onboarding-title">Welcome to CALO</h1>
+    <p class="onboarding-sub">Enter your rider name so others can identify you on the mesh.</p>
+
+    <div class="field">
+      <label class="field-label">Your Name</label>
+      <input
+        class="field-input"
+        type="text"
+        placeholder="e.g. Alex Rivera"
+        [(ngModel)]="name"
+        maxlength="32"
+        (keyup.enter)="confirm()"
+        autofocus
+      />
+      @if (error()) {
+        <span class="field-error">{{ error() }}</span>
+      }
+    </div>
+
+    <button
+      class="rm-btn rm-btn--primary rm-btn--full confirm-btn"
+      (click)="confirm()"
+      [disabled]="name.trim().length < 2"
+    >
+      Let's Ride
+    </button>
+
+  </div>
+</div>
