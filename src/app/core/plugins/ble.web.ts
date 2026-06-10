@@ -92,10 +92,11 @@ export class BleWeb extends WebPlugin implements BlePluginDefinition {
           deviceAddress: peer.address,
           deviceName:    peer.deviceName,
           rssi:          peer.rssi,
+          // Use compact keys matching the on-device beacon format
           payload: JSON.stringify({
-            name:    peer.fullName,
-            status:  peer.status,
-            battery: peer.battery,
+            n: peer.fullName,
+            s: peer.status,
+            b: peer.battery,
           }),
         };
 

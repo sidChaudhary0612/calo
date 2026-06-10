@@ -28,11 +28,7 @@ export class OnboardingComponent {
       return;
     }
     this.settings.saveRiderName(trimmed);
-    this.mesh.selfRider.update(r => ({
-      ...r,
-      name: trimmed,
-      avatarInitials: trimmed.split(' ').map(w => w[0]).join('').substring(0, 2).toUpperCase(),
-    }));
+    this.mesh.applyRiderName(trimmed);
     this.router.navigate(['/dashboard']);
   }
 }

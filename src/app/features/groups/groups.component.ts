@@ -12,7 +12,7 @@ type View = 'home' | 'create' | 'join';
 })
 export class GroupsComponent {
   readonly group   = computed(() => this.mesh.activeGroup());
-  readonly members = computed(() => this.mesh.getGroupMembers());
+  readonly members = computed(() => this.mesh.groupMembers());
 
   view        = signal<View>('home');
   groupName   = '';
