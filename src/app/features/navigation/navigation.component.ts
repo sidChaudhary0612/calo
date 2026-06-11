@@ -198,7 +198,7 @@ export class NavigationComponent implements OnInit, AfterViewInit, OnDestroy {
     this.isSearching.set(true);
     try {
       const url = `${NOMINATIM}?q=${encodeURIComponent(query)}&format=json&limit=5&addressdetails=0`;
-      const res = await fetch(url, { headers: { 'Accept-Language': 'en', 'User-Agent': 'CALO/1.0' } });
+      const res = await fetch(url, { headers: { 'Accept-Language': 'en', 'User-Agent': 'RATH/1.0' } });
       if (!res.ok) throw new Error('Search failed');
       const data: Array<{ display_name: string; lat: string; lon: string }> = await res.json();
       this.searchResults.set(data.map(d => ({
@@ -370,7 +370,7 @@ export class NavigationComponent implements OnInit, AfterViewInit, OnDestroy {
 
     const ZOOM_LEVELS = [10, 11, 12, 13, 14, 15];
     const TILE_URL    = 'https://tile.openstreetmap.org/{z}/{x}/{y}.png';
-    const CACHE_NAME  = 'calo-map-tiles-v1';
+    const CACHE_NAME  = 'rath-map-tiles-v1';
 
     try {
       const cache = await caches.open(CACHE_NAME);
@@ -432,10 +432,8 @@ export class NavigationComponent implements OnInit, AfterViewInit, OnDestroy {
     if (loc) {
       this.mapSvc.init(this.mapContainerRef.nativeElement, [loc.lng, loc.lat], 14);
       this.mapSvc.updateSelfLocation(loc);
-    } else if (attempts < 30) {
+    } else if (attempts < 150) {
       setTimeout(() => this._initMapWhenReady(attempts + 1), 200);
-    } else {
-      this.mapSvc.init(this.mapContainerRef.nativeElement, [0, 0], 2);
     }
   }
 

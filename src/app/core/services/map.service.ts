@@ -21,7 +21,7 @@ const MAP_STYLE_ONLINE = 'https://tiles.stadiamaps.com/styles/alidade_smooth_dar
 
 const MAP_STYLE_OFFLINE: maplibregl.StyleSpecification = {
   version: 8,
-  name: 'CALO Offline',
+  name: 'RATH Offline',
   sources: {
     'osm-tiles': {
       type: 'raster',
@@ -61,11 +61,18 @@ export class MapService {
     if (this._map) return;
     ensurePingKeyframes();
 
+    // Restrict panning/zooming to India's geographic bounds
+    const INDIA_BOUNDS: maplibregl.LngLatBoundsLike = [
+      [68.1766451354, 7.96553477623],   // SW: Gujarat coast / Kanyakumari
+      [97.4025614766, 35.4940095078],   // NE: Arunachal Pradesh
+    ];
+
     this._map = new maplibregl.Map({
       container,
       style:  MAP_STYLE_ONLINE,
       center,
       zoom,
+      maxBounds: INDIA_BOUNDS,
       attributionControl: false,
     });
 

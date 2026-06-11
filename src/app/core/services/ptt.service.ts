@@ -36,6 +36,17 @@ export class PttService implements OnDestroy {
   readonly txDurationMs = signal(0);
   readonly speakerLog   = signal<SpeakerEntry[]>([]);
 
+  // ── Peer registry (socket address → rider name) ──────────────────────────
+  private _peerNames = new Map<string, string>();
+
+  registerPeer(address: string, name: string): void {
+    this._peerNames.set(address, name);
+  }
+
+  unregisterPeer(address: string): void {
+    this._peerNames.delete(address);
+  }
+
   // ── Private ─────────────────────────────────────────────────────────────
   private _stream:   MediaStream   | null = null;
   private _recorder: MediaRecorder | null = null;
@@ -160,7 +171,7 @@ export class PttService implements OnDestroy {
 
       // Update state to "receiving" for the duration of this chunk
       if (this.state() !== 'transmitting') {
-        const peerName = peerAddr === '127.0.0.1' ? 'Echo' : peerAddr;
+        const peerName = this._peerNames.get(peerAddr) ?? (peerAddr === '127.0.0.1' ? 'Echo' : peerAddr);
         this._onIncomingStart(peerName);
         src.onended = () => this._onIncomingEnd(peerName);
       }

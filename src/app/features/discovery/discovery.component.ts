@@ -32,7 +32,9 @@ export class DiscoveryComponent implements OnDestroy {
     this.pendingInvite.set(rider.id);
     try {
       await this.mesh.connectToPeer(rider.id);
-    } catch { /* best-effort */ }
+      // Add to active group once Wi-Fi Direct connection succeeds
+      this.mesh.addPeerToGroup(rider.id);
+    } catch { /* best-effort — Wi-Fi Direct may already be grouping */ }
     setTimeout(() => this.pendingInvite.set(''), 2000);
   }
 

@@ -2,8 +2,8 @@ import type { CapacitorConfig } from '@capacitor/cli';
 
 const config: CapacitorConfig = {
   appId:   'com.ridemesh.app',
-  appName: 'CALO',
-  webDir:  'dist/calo/browser',
+  appName: 'RATH',
+  webDir:  'dist/rath/browser',
 
   server: {
     // Allow navigation to tile servers and Nominatim for geocoding

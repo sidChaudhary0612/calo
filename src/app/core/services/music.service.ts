@@ -1,5 +1,6 @@
-import { Injectable, inject, signal } from '@angular/core';
+import { Injectable, inject, signal, OnDestroy } from '@angular/core';
 import { DataBusService } from './data-bus.service';
+import { P2pSocket } from '../plugins/p2p-socket.plugin';
 
 export interface Track {
   id:       string;
@@ -27,7 +28,7 @@ interface MusicSyncFrame {
 }
 
 @Injectable({ providedIn: 'root' })
-export class MusicService {
+export class MusicService implements OnDestroy {
   readonly tracks        = signal<Track[]>(MOCK_TRACKS);
   readonly currentTrack  = signal<Track | null>(null);
   readonly playbackState = signal<PlaybackState>('stopped');
@@ -37,14 +38,29 @@ export class MusicService {
 
   private _ticker:   ReturnType<typeof setInterval> | null = null;
   private _teardown: (() => void) | null = null;
+  private _peerConnectedListener: { remove(): void } | null = null;
+  private _peerDisconnectedListener: { remove(): void } | null = null;
+  private _connectedPeers = new Set<string>();
   private _bus = inject(DataBusService);
 
   constructor() {
+    this._initPeerListeners();
     this._teardown = this._bus.register('music', (payload) => {
       try {
         const frame: MusicSyncFrame = JSON.parse(atob(payload));
         this._applySync(frame);
       } catch { /* malformed */ }
+    });
+  }
+
+  private async _initPeerListeners(): Promise<void> {
+    this._peerConnectedListener = await P2pSocket.addListener('peerConnected', ev => {
+      this._connectedPeers.add(ev.peerAddress);
+      this.syncedRiders.set(this._connectedPeers.size);
+    });
+    this._peerDisconnectedListener = await P2pSocket.addListener('peerDisconnected', ev => {
+      this._connectedPeers.delete(ev.peerAddress);
+      this.syncedRiders.set(this._connectedPeers.size);
     });
   }
 
@@ -135,7 +151,6 @@ export class MusicService {
         if (track) {
           this.play(track, false);
           this.position.set(Math.min((frame.position ?? 0) + latencySec, track.duration));
-          this.syncedRiders.update(n => n + 1);
         }
         break;
       }
@@ -148,7 +163,6 @@ export class MusicService {
         break;
       case 'stop':
         this.stop(false);
-        this.syncedRiders.set(0);
         break;
     }
   }
@@ -165,5 +179,7 @@ export class MusicService {
   ngOnDestroy(): void {
     this._clearTicker();
     this._teardown?.();
+    this._peerConnectedListener?.remove();
+    this._peerDisconnectedListener?.remove();
   }
 }

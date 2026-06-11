@@ -1,6 +1,6 @@
 import { Injectable, signal } from '@angular/core';
 
-const KEY_NAME = 'calo_rider_name';
+const KEY_NAME = 'rath_rider_name';
 
 @Injectable({ providedIn: 'root' })
 export class SettingsService {

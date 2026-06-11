@@ -4,7 +4,7 @@ import type { BleDevice, BlePluginDefinition } from './ble.plugin';
 // Shared registry so BLE and Wi-Fi stubs emit the same generated peers
 export interface SimulatedPeer {
   address:    string;   // canonical MAC
-  deviceName: string;   // e.g. "CALO-7F3A"
+  deviceName: string;   // e.g. "RATH-7F3A"
   fullName:   string;   // e.g. "Rider 7F3A"
   rssi:       number;
   battery:    number;
@@ -51,7 +51,7 @@ export function buildRegistry(): void {
 
     peerRegistry.push({
       address:   addr,
-      deviceName: `CALO-${tag}`,
+      deviceName: `RATH-${tag}`,
       fullName:   `Rider ${tag}`,
       rssi,
       battery:    20 + Math.floor(Math.random() * 80),

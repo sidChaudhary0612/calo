@@ -189,3 +189,74 @@
   margin-top: 2px;
   font-family: monospace;
 }
+
+// ─── SOS Map Overlay ─────────────────────────────────────────────────────────
+
+.sos-map-overlay {
+  position: fixed;
+  inset: 0;
+  z-index: 200;
+  display: flex;
+  flex-direction: column;
+  background: var(--bg-base, #0D0D1A);
+}
+
+.sos-map-header {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  padding: 12px 16px;
+  background: var(--bg-card, #131320);
+  border-bottom: 1px solid rgba(230, 57, 70, 0.2);
+  flex-shrink: 0;
+}
+
+.sos-map-info {
+  display: flex;
+  flex-direction: column;
+  gap: 2px;
+}
+
+.sos-map-name {
+  font-size: 1rem;
+  font-weight: 700;
+  color: var(--text-primary);
+}
+
+.sos-map-type {
+  font-size: 0.72rem;
+  font-weight: 800;
+  text-transform: uppercase;
+  letter-spacing: 0.06em;
+
+  &--red    { color: var(--rm-red); }
+  &--orange { color: var(--rm-orange); }
+}
+
+.sos-map-close {
+  width: 44px;
+  height: 44px;
+  border-radius: 50%;
+  border: none;
+  background: rgba(255,255,255,0.06);
+  color: var(--text-primary);
+  cursor: pointer;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+}
+
+.sos-map-canvas {
+  flex: 1;
+  min-height: 0;
+}
+
+.sos-map-coords {
+  padding: 10px 16px;
+  font-size: 0.72rem;
+  font-family: monospace;
+  color: var(--text-muted);
+  background: var(--bg-card, #131320);
+  border-top: 1px solid rgba(255,255,255,0.05);
+  flex-shrink: 0;
+}

@@ -118,14 +118,18 @@ public class BlePlugin extends Plugin {
             .setScanMode(ScanSettings.SCAN_MODE_LOW_LATENCY)
             .build();
 
+        // No service-UUID filter — some Android chipsets drop the filter silently when
+        // the advertiser sets neverForLocation. We check SERVICE_UUID in emitScanResult.
         List<ScanFilter> filters = new ArrayList<>();
-        filters.add(new ScanFilter.Builder()
-            .setServiceUuid(new ParcelUuid(SERVICE_UUID))
-            .build());
 
         scanCallback = new ScanCallback() {
             @Override
             public void onScanResult(int callbackType, ScanResult result) {
+                ScanRecord rec = result.getScanRecord();
+                // Only surface devices that carry our service UUID
+                if (rec == null) return;
+                List<ParcelUuid> uuids = rec.getServiceUuids();
+                if (uuids == null || !uuids.contains(new ParcelUuid(SERVICE_UUID))) return;
                 emitScanResult(result);
             }
             @Override
@@ -340,14 +344,6 @@ public class BlePlugin extends Plugin {
         BluetoothDevice device = result.getDevice();
         ScanRecord record = result.getScanRecord();
 
-        String payload = "";
-        if (record != null) {
-            byte[] serviceData = record.getServiceData(new ParcelUuid(SERVICE_UUID));
-            if (serviceData != null) {
-                payload = new String(serviceData, StandardCharsets.UTF_8);
-            }
-        }
-
         String deviceName = "Unknown";
         try {
             if (Build.VERSION.SDK_INT < Build.VERSION_CODES.S ||
@@ -357,10 +353,76 @@ public class BlePlugin extends Plugin {
             }
         } catch (Exception ignored) {}
 
+        // Try service-data fast path (first 20 bytes embedded in the advertisement)
+        String fastPayload = "";
+        if (record != null) {
+            byte[] serviceData = record.getServiceData(new ParcelUuid(SERVICE_UUID));
+            if (serviceData != null) {
+                fastPayload = new String(serviceData, StandardCharsets.UTF_8);
+            }
+        }
+
+        final String finalDeviceName = deviceName;
+        final int rssi = result.getRssi();
+
+        // If we got a full JSON object from service data, emit immediately
+        if (fastPayload.startsWith("{") && fastPayload.endsWith("}")) {
+            emitDevice(device.getAddress(), finalDeviceName, rssi, fastPayload);
+            return;
+        }
+
+        // Payload is missing or truncated — do a GATT read to get the full beacon
+        if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.S &&
+            getContext().checkSelfPermission(Manifest.permission.BLUETOOTH_CONNECT) != PackageManager.PERMISSION_GRANTED) {
+            // No CONNECT permission — emit with whatever we have
+            emitDevice(device.getAddress(), finalDeviceName, rssi, fastPayload);
+            return;
+        }
+
+        final String partialPayload = fastPayload;
+        device.connectGatt(getContext(), false, new android.bluetooth.BluetoothGattCallback() {
+            @Override
+            public void onConnectionStateChange(BluetoothGatt gatt, int status, int newState) {
+                if (newState == BluetoothGatt.STATE_CONNECTED) {
+                    gatt.discoverServices();
+                } else if (newState == BluetoothGatt.STATE_DISCONNECTED) {
+                    gatt.close();
+                }
+            }
+            @Override
+            public void onServicesDiscovered(BluetoothGatt gatt, int status) {
+                BluetoothGattService svc = gatt.getService(SERVICE_UUID);
+                if (svc == null) {
+                    gatt.disconnect();
+                    emitDevice(device.getAddress(), finalDeviceName, rssi, partialPayload);
+                    return;
+                }
+                BluetoothGattCharacteristic ch = svc.getCharacteristic(BEACON_CHAR);
+                if (ch == null) {
+                    gatt.disconnect();
+                    emitDevice(device.getAddress(), finalDeviceName, rssi, partialPayload);
+                    return;
+                }
+                gatt.readCharacteristic(ch);
+            }
+            @Override
+            public void onCharacteristicRead(BluetoothGatt gatt, BluetoothGattCharacteristic characteristic, int status) {
+                String fullPayload = partialPayload;
+                if (status == BluetoothGatt.GATT_SUCCESS) {
+                    byte[] val = characteristic.getValue();
+                    if (val != null) fullPayload = new String(val, StandardCharsets.UTF_8);
+                }
+                gatt.disconnect();
+                emitDevice(device.getAddress(), finalDeviceName, rssi, fullPayload);
+            }
+        });
+    }
+
+    private void emitDevice(String address, String deviceName, int rssi, String payload) {
         JSObject ev = new JSObject();
-        ev.put("deviceAddress", device.getAddress());
+        ev.put("deviceAddress", address);
         ev.put("deviceName",    deviceName);
-        ev.put("rssi",          result.getRssi());
+        ev.put("rssi",          rssi);
         ev.put("payload",       payload);
         notifyListeners("deviceFound", ev);
     }

@@ -5,6 +5,7 @@ import { BlePlugin, BleDevice } from '../plugins/ble.plugin';
 import { P2pSocket } from '../plugins/p2p-socket.plugin';
 import { DataBusService } from './data-bus.service';
 import { SettingsService } from './settings.service';
+import { PttService } from './ptt.service';
 
 interface BeaconPayload {
   n:  string;             // rider name  (shortened key to fit 20-byte BLE advert limit)
@@ -33,11 +34,12 @@ export class MeshService implements OnDestroy {
   readonly meshConnected = signal(false);
   private _settings = inject(SettingsService);
   private _bus      = inject(DataBusService);
+  private _ptt      = inject(PttService);
 
   readonly selfRider = signal<Rider>((() => {
     const name = this._settings.riderName() || 'Rider';
     const initials = name.split(' ').map((w: string) => w[0]).join('').substring(0, 2).toUpperCase();
-    return { id: 'self', name, avatarInitials: initials, status: 'online', role: 'solo', battery: 88, signal: 100 };
+    return { id: 'self', name, avatarInitials: initials, status: 'online', role: 'solo', battery: undefined, signal: 100 };
   })());
 
   readonly selfId = 'self';
@@ -56,6 +58,21 @@ export class MeshService implements OnDestroy {
         this._updatePeerLocation(peerAddress, data);
       } catch { /* malformed */ }
     });
+
+    this._initBattery();
+  }
+
+  private _initBattery(): void {
+    const nav = navigator as Navigator & { getBattery?: () => Promise<{ level: number; addEventListener(e: string, cb: () => void): void }> };
+    if (typeof nav.getBattery !== 'function') return;
+    nav.getBattery().then(batt => {
+      const update = () => {
+        const pct = Math.round(batt.level * 100);
+        this.selfRider.update(r => ({ ...r, battery: pct }));
+      };
+      update();
+      batt.addEventListener('levelchange', update);
+    }).catch(() => { /* battery API unavailable */ });
   }
 
   // ─── Rider name (called from OnboardingComponent after name is saved) ────
@@ -119,6 +136,23 @@ export class MeshService implements OnDestroy {
     });
     this._listeners.push(connListener);
 
+    const socketConnListener = await P2pSocket.addListener('peerConnected', ev => {
+      const addr = ev.peerAddress;
+      // Find the rider whose Wi-Fi address matches and register their name with PTT
+      this._peers.forEach(rec => {
+        if (rec.wifiAddress === addr) {
+          const name = rec.beacon?.n || rec.deviceName?.replace('rath-', '') || addr;
+          this._ptt.registerPeer(addr, name);
+        }
+      });
+    });
+    this._listeners.push(socketConnListener);
+
+    const socketDiscListener = await P2pSocket.addListener('peerDisconnected', ev => {
+      this._ptt.unregisterPeer(ev.peerAddress);
+    });
+    this._listeners.push(socketDiscListener);
+
     await Promise.allSettled([
       BlePlugin.startScan(),
       WifiDirect.startDiscovery(),
@@ -163,7 +197,7 @@ export class MeshService implements OnDestroy {
 
   joinGroup(passcode: string): boolean {
     if (passcode.length < 4) return false;
-    // Find a nearby rider whose beacon groupId starts with the entered passcode.
+    // Find a nearby rider whose beacon groupId matches the entered passcode.
     // If none found yet, still create the group locally — the member list fills
     // in reactively as BLE/Wi-Fi peers with matching group beacons are discovered.
     const matchingPeers = this.nearbyRiders().filter(r => {
@@ -171,9 +205,10 @@ export class MeshService implements OnDestroy {
       return rec?.beacon?.g === passcode;
     });
     const leader = matchingPeers[0];
+    const groupName = leader ? leader.name + "'s Group" : 'Ride Group';
     const group: RideGroup = {
       id:        'g-' + passcode,
-      name:      'Ride Group',
+      name:      groupName,
       leaderId:  leader?.id ?? this.selfId,
       memberIds: [this.selfId, ...matchingPeers.map(r => r.id)],
       createdAt: new Date(),
@@ -211,9 +246,16 @@ export class MeshService implements OnDestroy {
     return this.nearbyRiders().find(r => r.id === id);
   }
 
-  async connectToPeer(wifiAddress: string): Promise<void> {
-    await WifiDirect.connect({ deviceAddress: wifiAddress });
+  /** Invite a nearby rider: looks up their Wi-Fi Direct address from the peer record. */
+  async connectToPeer(riderId: string): Promise<void> {
+    const rec = this._peers.get(riderId);
+    const wifiAddr = rec?.wifiAddress ?? riderId;
+    await WifiDirect.connect({ deviceAddress: wifiAddr });
     this.meshConnected.set(true);
+  }
+
+  getWifiAddress(riderId: string): string | undefined {
+    return this._peers.get(riderId)?.wifiAddress;
   }
 
   isInGroup(riderId: string): boolean {
@@ -263,6 +305,11 @@ export class MeshService implements OnDestroy {
     this._peers.set(canonKey, record);
     this._rebuildRiders();
 
+    // Keep PTT name registry up-to-date as beacons resolve real names
+    if (record.wifiAddress && record.beacon?.n) {
+      this._ptt.registerPeer(record.wifiAddress, record.beacon.n);
+    }
+
     // Auto-join: if this peer's beacon groupId matches our active group's passcode,
     // add them to our member list so they appear in the group screen immediately.
     const group = this.activeGroup();
@@ -283,6 +330,13 @@ export class MeshService implements OnDestroy {
     record.wifiConnected = p.status === 0;
     this._peers.set(canonKey, record);
     this._rebuildRiders();
+
+    // Auto-join: check if this peer's beacon groupId matches our active group
+    const group = this.activeGroup();
+    const beaconGroup = record.beacon?.g;
+    if (group && beaconGroup && group.passcode === beaconGroup) {
+      this.addPeerToGroup(canonKey);
+    }
   }
 
   private _findOrCreate(canonKey: string, nameKey: string): [string, PeerRecord] {
@@ -321,7 +375,7 @@ export class MeshService implements OnDestroy {
         ? this._haversineM(this.selfLocation.lat, this.selfLocation.lng, rec.location.lat, rec.location.lng)
         : undefined;
 
-      const displayName = beacon?.n || rec.deviceName?.replace('calo-', '') || 'Unknown';
+      const displayName = beacon?.n || rec.deviceName?.replace('rath-', '') || 'Unknown';
       const rider: Rider = {
         id:             addr,
         name:           displayName,
