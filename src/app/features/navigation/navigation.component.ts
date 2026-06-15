@@ -1,6 +1,6 @@
 import {
   Component, computed, effect, ElementRef, OnDestroy, OnInit,
-  signal, ViewChild, AfterViewInit, ChangeDetectorRef, inject,
+  signal, ViewChild, AfterViewInit, ChangeDetectorRef, inject, Injector, runInInjectionContext,
 } from '@angular/core';
 import { FormsModule } from '@angular/forms';
 import { CommonModule } from '@angular/common';
@@ -67,10 +67,11 @@ function osrmStepToInstruction(step: {
 export class NavigationComponent implements OnInit, AfterViewInit, OnDestroy {
   @ViewChild('mapContainer') mapContainerRef!: ElementRef<HTMLDivElement>;
 
-  readonly mapSvc  = inject(MapService);
-  readonly loc     = inject(LocationService);
-  readonly meshSvc = inject(MeshService);
-  private _cdr     = inject(ChangeDetectorRef);
+  readonly mapSvc   = inject(MapService);
+  readonly loc      = inject(LocationService);
+  readonly meshSvc  = inject(MeshService);
+  private _cdr      = inject(ChangeDetectorRef);
+  private _injector = inject(Injector);
 
   readonly mapReady  = computed(() => this.mapSvc.isReady());
   readonly isOffline = computed(() => this.mapSvc.isOffline());
@@ -114,42 +115,47 @@ export class NavigationComponent implements OnInit, AfterViewInit, OnDestroy {
   ngOnInit(): void {
     this.loc.start().then(() => {
       const loc = this.loc.currentLocation();
-      if (loc) this.gpsReady.set(true);
-      else {
-        const waitGps = effect(() => {
-          if (this.loc.currentLocation()) { this.gpsReady.set(true); waitGps.destroy(); }
+      if (loc) {
+        this.gpsReady.set(true);
+      } else {
+        // effect() requires injection context — use runInInjectionContext since we're in a Promise callback
+        runInInjectionContext(this._injector, () => {
+          const waitGps = effect(() => {
+            if (this.loc.currentLocation()) { this.gpsReady.set(true); waitGps.destroy(); }
+          });
         });
       }
     });
 
-    this._locationEffectRef = effect(() => {
-      const l = this.loc.currentLocation();
-      if (l) this.mapSvc.updateSelfLocation(l);
-    });
+    this._locationEffectRef = runInInjectionContext(this._injector, () =>
+      effect(() => {
+        const l = this.loc.currentLocation();
+        if (l) this.mapSvc.updateSelfLocation(l);
+      })
+    );
 
     // Mirror group members onto map whenever they update
-    this._groupEffectRef = effect(() => {
-      const group   = this.meshSvc.activeGroup();
-      const riders  = this.meshSvc.nearbyRiders();
-      const members = group
-        ? riders.filter(r => group.memberIds.includes(r.id) && r.id !== 'self')
-        : [];
+    this._groupEffectRef = runInInjectionContext(this._injector, () =>
+      effect(() => {
+        const group   = this.meshSvc.activeGroup();
+        const riders  = this.meshSvc.nearbyRiders();
+        const members = group
+          ? riders.filter(r => group.memberIds.includes(r.id) && r.id !== 'self')
+          : [];
 
-      // Collect which IDs are active
-      const activeIds = new Set(members.map(r => r.id));
+        const activeIds = new Set(members.map(r => r.id));
 
-      // Remove stale markers (riders that left the group or lost location)
-      riders
-        .filter(r => r.id !== 'self' && !activeIds.has(r.id))
-        .forEach(r => this.mapSvc.removeRiderMarker(r.id));
+        riders
+          .filter(r => r.id !== 'self' && !activeIds.has(r.id))
+          .forEach(r => this.mapSvc.removeRiderMarker(r.id));
 
-      // Update/add active member markers
-      members.forEach((r: Rider) => {
-        if (r.location) {
-          this.mapSvc.updateRiderMarker(r.id, r.name, r.avatarInitials, r.location);
-        }
-      });
-    });
+        members.forEach((r: Rider) => {
+          if (r.location) {
+            this.mapSvc.updateRiderMarker(r.id, r.name, r.avatarInitials, r.location);
+          }
+        });
+      })
+    );
   }
 
   ngAfterViewInit(): void {

@@ -10,22 +10,9 @@
   </header>
 
   <div class="rm-body">
-    @if (!session()) {
-      <!-- Session start -->
-      <div class="session-start animate-slide-up">
-        <div class="session-icon">
-          <svg width="48" height="48" viewBox="0 0 24 24" fill="var(--rm-orange)">
-            <path d="M12 3v10.55c-.59-.34-1.27-.55-2-.55-2.21 0-4 1.79-4 4s1.79 4 4 4 4-1.79 4-4V7h4V3h-6z"/>
-          </svg>
-        </div>
-        <h3>Group Music Sync</h3>
-        <p>Start a session to synchronize playback with your group. All riders hear the same track.</p>
-        <button class="rm-btn rm-btn--primary rm-btn--full mt-lg" (click)="music.startSession()">
-          Start Sync Session
-        </button>
-      </div>
-    } @else {
-      <!-- Now Playing -->
+
+    <!-- Session banner / Now Playing — only when session active -->
+    @if (session()) {
       @if (current()) {
         <div class="now-playing animate-slide-up">
           <div class="album-art">
@@ -78,36 +65,53 @@
           </div>
         </div>
       }
-
-      <!-- Track List -->
-      <div class="rm-section-label mt-lg">Queue</div>
-      <div class="track-list animate-fade-in">
-        @for (track of tracks(); track track.id) {
-          <div
-            class="rm-card track-row rm-card--clickable"
-            [class.track-row--active]="current()?.id === track.id"
-            (click)="selectTrack(track)"
-          >
-            <div class="track-num">
-              @if (current()?.id === track.id && state() === 'playing') {
-                <div class="playing-bars">
-                  @for (i of [1,2,3]; track i) {
-                    <div class="p-bar" [style.animation-delay.ms]="i * 100"></div>
-                  }
-                </div>
-              } @else {
-                <span>{{ $index + 1 }}</span>
-              }
-            </div>
-            <div class="track-details">
-              <div class="t-title" [class.t-title--active]="current()?.id === track.id">{{ track.title }}</div>
-              <div class="t-artist">{{ track.artist }}</div>
-            </div>
-            <span class="t-dur">{{ music.formatTime(track.duration) }}</span>
-          </div>
-        }
+    } @else {
+      <!-- Session start prompt -->
+      <div class="session-start animate-slide-up">
+        <div class="session-icon">
+          <svg width="48" height="48" viewBox="0 0 24 24" fill="var(--rm-orange)">
+            <path d="M12 3v10.55c-.59-.34-1.27-.55-2-.55-2.21 0-4 1.79-4 4s1.79 4 4 4 4-1.79 4-4V7h4V3h-6z"/>
+          </svg>
+        </div>
+        <h3>Group Music Sync</h3>
+        <p>Start a session to synchronize playback with your group. All riders hear the same track.</p>
+        <button class="rm-btn rm-btn--primary rm-btn--full mt-lg" (click)="music.startSession()">
+          Start Sync Session
+        </button>
       </div>
+    }
 
+    <!-- Track list — always visible so users can browse before starting a session -->
+    <div class="rm-section-label mt-lg">{{ session() ? 'Queue' : 'Tracks' }}</div>
+    <div class="track-list animate-fade-in">
+      @for (track of tracks(); track track.id) {
+        <div
+          class="rm-card track-row"
+          [class.rm-card--clickable]="session()"
+          [class.track-row--active]="current()?.id === track.id"
+          (click)="session() ? selectTrack(track) : null"
+        >
+          <div class="track-num">
+            @if (current()?.id === track.id && state() === 'playing') {
+              <div class="playing-bars">
+                @for (i of [1,2,3]; track i) {
+                  <div class="p-bar" [style.animation-delay.ms]="i * 100"></div>
+                }
+              </div>
+            } @else {
+              <span>{{ $index + 1 }}</span>
+            }
+          </div>
+          <div class="track-details">
+            <div class="t-title" [class.t-title--active]="current()?.id === track.id">{{ track.title }}</div>
+            <div class="t-artist">{{ track.artist }}</div>
+          </div>
+          <span class="t-dur">{{ music.formatTime(track.duration) }}</span>
+        </div>
+      }
+    </div>
+
+    @if (session()) {
       <button class="rm-btn rm-btn--danger rm-btn--full mt-lg" (click)="music.endSession()">
         End Session
       </button>
