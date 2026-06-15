@@ -198,19 +198,18 @@ export class MeshService implements OnDestroy {
   joinGroup(passcode: string): boolean {
     if (passcode.length < 4) return false;
 
-    // Require at least one nearby peer broadcasting this passcode.
-    // Without a matching beacon there is no group to join.
+    // Accept the code immediately — BLE discovery is slow and may not have
+    // seen the leader's beacon yet. Add any already-visible matching peers
+    // now; the rest join reactively via addPeerToGroup() as beacons arrive.
     const matchingPeers = this.nearbyRiders().filter(r => {
       const rec = this._peers.get(r.id);
       return rec?.beacon?.g === passcode;
     });
-    if (matchingPeers.length === 0) return false;
-
     const leader = matchingPeers[0];
     const group: RideGroup = {
       id:        'g-' + passcode,
-      name:      leader.name + "'s Group",
-      leaderId:  leader.id,
+      name:      leader ? leader.name + "'s Group" : 'Ride Group',
+      leaderId:  leader?.id ?? this.selfId,
       memberIds: [this.selfId, ...matchingPeers.map(r => r.id)],
       createdAt: new Date(),
       status:    'forming',
