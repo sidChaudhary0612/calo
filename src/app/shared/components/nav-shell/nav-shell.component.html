@@ -1,4 +1,24 @@
 <div class="shell">
+
+  <!-- ── Incoming invite banner ─────────────────────────────────────── -->
+  @if (invite()) {
+    <div class="invite-banner animate-slide-up">
+      <div class="invite-banner__icon">
+        <svg width="22" height="22" viewBox="0 0 24 24" fill="var(--rm-primary)">
+          <path d="M16 11c1.66 0 2.99-1.34 2.99-3S17.66 5 16 5c-1.66 0-3 1.34-3 3s1.34 3 3 3zm-8 0c1.66 0 2.99-1.34 2.99-3S9.66 5 8 5C6.34 5 5 6.34 5 8s1.34 3 3 3zm0 2c-2.33 0-7 1.17-7 3.5V19h14v-2.5c0-2.33-4.67-3.5-7-3.5zm8 0c-.29 0-.62.02-.97.05 1.16.84 1.97 1.97 1.97 3.45V19h6v-2.5c0-2.33-4.67-3.5-7-3.5z"/>
+        </svg>
+      </div>
+      <div class="invite-banner__text">
+        <span class="invite-banner__name">{{ invite()!.payload.fromName }}</span>
+        <span class="invite-banner__msg">invited you to join <strong>{{ invite()!.payload.groupName }}</strong></span>
+      </div>
+      <div class="invite-banner__actions">
+        <button class="invite-btn invite-btn--decline" (click)="inviteSvc.decline()">Decline</button>
+        <button class="invite-btn invite-btn--accept"  (click)="inviteSvc.accept()">Join</button>
+      </div>
+    </div>
+  }
+
   <main class="shell__content">
     <router-outlet />
   </main>

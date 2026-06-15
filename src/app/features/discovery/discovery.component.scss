@@ -286,11 +286,26 @@
   font-size: 0.8rem;
   padding: 0 var(--space-md);
   flex-shrink: 0;
+  transition: background 0.2s, color 0.2s;
 
   &--sent {
-    background: var(--rm-green-glow);
-    color: var(--rm-green);
-    border-color: var(--rm-green-glow);
+    background: rgba(107, 70, 255, 0.15);
+    color: var(--rm-primary, #6B46FF);
+    border-color: var(--rm-primary, #6B46FF);
+  }
+
+  &--accepted {
+    background: rgba(0, 229, 100, 0.12);
+    color: var(--rm-green, #00E564);
+    border-color: var(--rm-green, #00E564);
+    pointer-events: none;
+  }
+
+  &--declined {
+    background: rgba(230, 57, 70, 0.1);
+    color: var(--rm-red, #E63946);
+    border-color: var(--rm-red, #E63946);
+    pointer-events: none;
   }
 }
 

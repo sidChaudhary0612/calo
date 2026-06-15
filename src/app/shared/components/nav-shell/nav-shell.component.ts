@@ -2,6 +2,7 @@ import { Component, computed } from '@angular/core';
 import { RouterOutlet, RouterLink, RouterLinkActive } from '@angular/router';
 import { MeshService } from '../../../core/services/mesh.service';
 import { EmergencyService } from '../../../core/services/emergency.service';
+import { InviteService } from '../../../core/services/invite.service';
 
 interface NavItem {
   path:  string;
@@ -27,10 +28,12 @@ export class NavShellComponent {
     this.emergency.activeAlerts().some(a => !a.resolved)
   );
 
-  readonly inGroup = computed(() => !!this.mesh.activeGroup());
+  readonly inGroup    = computed(() => !!this.mesh.activeGroup());
+  readonly invite     = computed(() => this.inviteSvc.pendingInvite());
 
   constructor(
     private mesh: MeshService,
     private emergency: EmergencyService,
+    readonly inviteSvc: InviteService,
   ) {}
 }

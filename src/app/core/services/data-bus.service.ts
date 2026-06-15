@@ -1,7 +1,7 @@
 import { Injectable, OnDestroy } from '@angular/core';
 import { P2pSocket } from '../plugins/p2p-socket.plugin';
 
-export type BusChannel = 'location' | 'sos' | 'music' | 'ptt-audio';
+export type BusChannel = 'location' | 'sos' | 'music' | 'ptt-audio' | 'invite';
 
 type FrameHandler = (payload: string, peerAddress: string) => void;
 

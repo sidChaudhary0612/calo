@@ -129,14 +129,18 @@
             <!-- Action -->
             @if (mesh.isInGroup(rider.id)) {
               <span class="rm-badge rm-badge--green">In Group</span>
+            } @else if (!mesh.activeGroup()) {
+              <span class="rm-badge rm-badge--muted" style="font-size:0.7rem">No Group</span>
             } @else {
               <button
                 class="rm-btn rm-btn--secondary invite-btn"
-                [class.invite-btn--sent]="pendingInvite() === rider.id"
-                [disabled]="pendingInvite() === rider.id"
+                [class.invite-btn--sent]="invitePending(rider.id)"
+                [class.invite-btn--accepted]="sentState().get(rider.id) === 'accepted'"
+                [class.invite-btn--declined]="sentState().get(rider.id) === 'declined'"
+                [disabled]="invitePending(rider.id)"
                 (click)="sendInvite(rider)"
               >
-                {{ pendingInvite() === rider.id ? 'Connecting…' : 'Invite' }}
+                {{ inviteLabel(rider.id) }}
               </button>
             }
           </div>

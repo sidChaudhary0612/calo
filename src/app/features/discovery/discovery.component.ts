@@ -1,6 +1,7 @@
-import { Component, computed, signal, OnDestroy } from '@angular/core';
+import { Component, computed } from '@angular/core';
 import { CommonModule } from '@angular/common';
 import { MeshService } from '../../core/services/mesh.service';
+import { InviteService } from '../../core/services/invite.service';
 import { Rider } from '../../core/models/rider.model';
 
 @Component({
@@ -10,32 +11,39 @@ import { Rider } from '../../core/models/rider.model';
   templateUrl: './discovery.component.html',
   styleUrl: './discovery.component.scss',
 })
-export class DiscoveryComponent implements OnDestroy {
-  readonly isScanning    = computed(() => this.mesh.isScanning());
-  readonly riders        = computed(() => this.mesh.nearbyRiders());
-  readonly connected     = computed(() => this.mesh.meshConnected());
-  readonly self          = computed(() => this.mesh.selfRider());
-  readonly onlineCount   = computed(() => this.riders().filter(r => r.status === 'online').length);
-  readonly pendingInvite = signal('');
+export class DiscoveryComponent {
+  readonly isScanning  = computed(() => this.mesh.isScanning());
+  readonly riders      = computed(() => this.mesh.nearbyRiders());
+  readonly connected   = computed(() => this.mesh.meshConnected());
+  readonly self        = computed(() => this.mesh.selfRider());
+  readonly onlineCount = computed(() => this.riders().filter(r => r.status === 'online').length);
+  readonly sentState   = computed(() => this.inviteSvc.sentState());
 
-  constructor(readonly mesh: MeshService) {}
-
-  ngOnDestroy(): void {
-    // Leave scan running — stopped only when user taps Stop
-  }
+  constructor(readonly mesh: MeshService, readonly inviteSvc: InviteService) {}
 
   scan(): void { this.mesh.startScan(); }
   stop(): void { this.mesh.stopScan(); }
 
-  async sendInvite(rider: Rider): Promise<void> {
+  sendInvite(rider: Rider): void {
     if (this.mesh.isInGroup(rider.id)) return;
-    this.pendingInvite.set(rider.id);
-    try {
-      await this.mesh.connectToPeer(rider.id);
-      // Add to active group once Wi-Fi Direct connection succeeds
-      this.mesh.addPeerToGroup(rider.id);
-    } catch { /* best-effort — Wi-Fi Direct may already be grouping */ }
-    setTimeout(() => this.pendingInvite.set(''), 2000);
+    if (!this.mesh.activeGroup()) return;
+    this.inviteSvc.sendInvite(rider.id);
+  }
+
+  inviteLabel(riderId: string): string {
+    const state = this.sentState().get(riderId);
+    switch (state) {
+      case 'sending':  return 'Connecting…';
+      case 'sent':     return 'Invited ✓';
+      case 'accepted': return 'Joined! 🎉';
+      case 'declined': return 'Declined';
+      default:         return 'Invite';
+    }
+  }
+
+  invitePending(riderId: string): boolean {
+    const s = this.sentState().get(riderId);
+    return s === 'sending' || s === 'sent';
   }
 
   signalBars(sig: number): number[] {
