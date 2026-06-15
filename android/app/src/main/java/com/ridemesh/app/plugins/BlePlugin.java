@@ -64,6 +64,8 @@ public class BlePlugin extends Plugin {
     private boolean               isScanning    = false;
     private boolean               isAdvertising = false;
     private byte[]                cachedBeaconPayload = new byte[0];
+    // Track addresses currently being GATT-read to avoid concurrent connection storms
+    private final java.util.Set<String> pendingGattReads = java.util.Collections.synchronizedSet(new java.util.HashSet<>());
 
     private PluginCall savedScanCall;
     private PluginCall savedAdvertiseCall;
@@ -229,16 +231,12 @@ public class BlePlugin extends Plugin {
             .setTimeout(0)
             .build();
 
-        // Embed first 20 bytes of JSON as fast-path service data.
-        // Scanners parse this first; if it's truncated they can connect and read
-        // the full value from the GATT characteristic.
-        byte[] advBytes = fullData.length > 20
-            ? java.util.Arrays.copyOf(fullData, 20)
-            : fullData;
-
+        // Only advertise the service UUID as a presence marker — no service data.
+        // Many Android chipsets silently drop or corrupt packets when addServiceData
+        // and addServiceUuid use the same UUID, causing other devices to miss us.
+        // Full beacon JSON is served via GATT characteristic read instead.
         AdvertiseData advData = new AdvertiseData.Builder()
             .addServiceUuid(new ParcelUuid(SERVICE_UUID))
-            .addServiceData(new ParcelUuid(SERVICE_UUID), advBytes)
             .setIncludeDeviceName(false)
             .build();
 
@@ -379,6 +377,13 @@ public class BlePlugin extends Plugin {
             return;
         }
 
+        // Avoid concurrent GATT connections to the same device — Android limits these
+        // and simultaneous attempts cause both to fail silently on many chipsets.
+        final String deviceAddr = device.getAddress();
+        if (!pendingGattReads.add(deviceAddr)) {
+            return; // already reading this device
+        }
+
         final String partialPayload = fastPayload;
         device.connectGatt(getContext(), false, new android.bluetooth.BluetoothGattCallback() {
             @Override
@@ -386,6 +391,7 @@ public class BlePlugin extends Plugin {
                 if (newState == BluetoothGatt.STATE_CONNECTED) {
                     gatt.discoverServices();
                 } else if (newState == BluetoothGatt.STATE_DISCONNECTED) {
+                    pendingGattReads.remove(deviceAddr);
                     gatt.close();
                 }
             }
@@ -394,13 +400,13 @@ public class BlePlugin extends Plugin {
                 BluetoothGattService svc = gatt.getService(SERVICE_UUID);
                 if (svc == null) {
                     gatt.disconnect();
-                    emitDevice(device.getAddress(), finalDeviceName, rssi, partialPayload);
+                    emitDevice(deviceAddr, finalDeviceName, rssi, partialPayload);
                     return;
                 }
                 BluetoothGattCharacteristic ch = svc.getCharacteristic(BEACON_CHAR);
                 if (ch == null) {
                     gatt.disconnect();
-                    emitDevice(device.getAddress(), finalDeviceName, rssi, partialPayload);
+                    emitDevice(deviceAddr, finalDeviceName, rssi, partialPayload);
                     return;
                 }
                 gatt.readCharacteristic(ch);
@@ -413,7 +419,7 @@ public class BlePlugin extends Plugin {
                     if (val != null) fullPayload = new String(val, StandardCharsets.UTF_8);
                 }
                 gatt.disconnect();
-                emitDevice(device.getAddress(), finalDeviceName, rssi, fullPayload);
+                emitDevice(deviceAddr, finalDeviceName, rssi, fullPayload);
             }
         });
     }

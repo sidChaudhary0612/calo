@@ -138,6 +138,15 @@ public class WifiDirectPlugin extends Plugin {
         if (deviceAddress == null) { call.reject("deviceAddress required"); return; }
         if (p2pManager == null) { call.reject("Wi-Fi Direct not available"); return; }
 
+        // Android 13+: NEARBY_WIFI_DEVICES is required to call p2pManager.connect()
+        if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.TIRAMISU) {
+            if (getContext().checkSelfPermission(Manifest.permission.NEARBY_WIFI_DEVICES) != PackageManager.PERMISSION_GRANTED) {
+                savedDiscoveryCall = call;
+                requestPermissionForAlias("nearbyWifi", call, "discoveryPermissionCallback");
+                return;
+            }
+        }
+
         WifiP2pConfig config = new WifiP2pConfig();
         config.deviceAddress = deviceAddress;
 

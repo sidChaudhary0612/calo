@@ -266,12 +266,45 @@ export class MeshService implements OnDestroy {
 
   private async _connectToGroupOwner(): Promise<void> {
     try {
-      const info = await WifiDirect.requestConnectionInfo();
-      if (info.groupFormed && info.groupOwnerAddress) {
-        await P2pSocket.connect({ host: info.groupOwnerAddress });
+      // First check if we're already in a Wi-Fi Direct group (e.g. from a prior connect)
+      const existingInfo = await WifiDirect.requestConnectionInfo();
+      if (existingInfo.groupFormed && existingInfo.groupOwnerAddress) {
+        await P2pSocket.connect({ host: existingInfo.groupOwnerAddress });
         this.meshConnected.set(true);
+        return;
       }
-    } catch { /* not yet connected */ }
+
+      // Not connected yet — find the leader's Wi-Fi address from the peer map and connect
+      const group = this.activeGroup();
+      if (!group) return;
+
+      let leaderWifiAddr: string | undefined;
+      this._peers.forEach(rec => {
+        if (rec.beacon?.g === group.passcode && rec.wifiAddress) {
+          leaderWifiAddr = rec.wifiAddress;
+        }
+      });
+
+      if (!leaderWifiAddr) return; // leader not yet visible over Wi-Fi Direct
+
+      // Initiate Wi-Fi Direct group formation — connection info arrives via broadcast
+      await WifiDirect.connect({ deviceAddress: leaderWifiAddr });
+
+      // Wait up to 15 s for group to form, then connect TCP socket
+      let attempts = 0;
+      const poll = async (): Promise<void> => {
+        if (attempts++ > 15) return;
+        const info = await WifiDirect.requestConnectionInfo();
+        if (info.groupFormed && info.groupOwnerAddress) {
+          await P2pSocket.connect({ host: info.groupOwnerAddress });
+          this.meshConnected.set(true);
+          return;
+        }
+        await new Promise(r => setTimeout(r, 1000));
+        return poll();
+      };
+      await poll();
+    } catch { /* not yet connected — will retry when peersChanged fires */ }
   }
 
   private _onBleDevice(d: BleDevice): void {
@@ -336,6 +369,10 @@ export class MeshService implements OnDestroy {
     const beaconGroup = record.beacon?.g;
     if (group && beaconGroup && group.passcode === beaconGroup) {
       this.addPeerToGroup(canonKey);
+      // Peer just became visible over Wi-Fi Direct — retry connection if not yet connected
+      if (!this.meshConnected()) {
+        this._connectToGroupOwner();
+      }
     }
   }
 
