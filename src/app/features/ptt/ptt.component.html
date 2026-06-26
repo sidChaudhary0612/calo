@@ -1,6 +1,6 @@
 <div class="rm-screen">
   <header class="rm-header">
-    <span class="rm-header__title">Push-To-Talk</span>
+    <span class="rm-header__title">Group Voice</span>
     @if (inGroup()) {
       <span class="rm-header__badge active">
         <span class="rm-dot rm-dot--green"></span>
@@ -19,15 +19,25 @@
         <svg width="28" height="28" viewBox="0 0 24 24" fill="var(--text-muted)">
           <path d="M12 2C6.48 2 2 6.48 2 12s4.48 10 10 10 10-4.48 10-10S17.52 2 12 2zm1 15h-2v-2h2v2zm0-4h-2V7h2v6z"/>
         </svg>
-        <span>Join a group to broadcast.<br>PTT works in solo mode too — only nearby riders will hear you.</span>
+        <span>Join a group to start full-duplex voice.<br>Everyone in the group can talk and listen at the same time.</span>
         <a routerLink="/groups" class="rm-btn rm-btn--secondary" style="min-height:40px;font-size:0.8rem;padding:0 16px;">
           Find a Group
         </a>
       </div>
     }
 
-    <!-- Receiving banner -->
-    @if (state() === 'receiving') {
+    <!-- Mic permission error -->
+    @if (micError()) {
+      <div class="rx-banner animate-slide-up">
+        <div class="rx-info">
+          <span class="rx-name">Microphone blocked</span>
+          <span class="rx-label">Grant microphone access to go live</span>
+        </div>
+      </div>
+    }
+
+    <!-- Live / speaking banner -->
+    @if (live() && someoneSpeaking()) {
       <div class="rx-banner animate-slide-up">
         <div class="rx-waveform">
           @for (i of [1,2,3,4,5,6,7,8]; track i) {
@@ -35,33 +45,28 @@
           }
         </div>
         <div class="rx-info">
-          <span class="rx-name">{{ speakerName() }}</span>
-          <span class="rx-label">speaking...</span>
+          <span class="rx-name">Voice active</span>
+          <span class="rx-label">someone is speaking...</span>
         </div>
       </div>
     }
 
-    <!-- PTT button -->
+    <!-- Go-live button -->
     <div class="ptt-center">
       <div class="ptt-ring-outer"
-           [class.ptt-ring-outer--tx]="state() === 'transmitting'"
-           [class.ptt-ring-outer--rx]="state() === 'receiving'">
+           [class.ptt-ring-outer--tx]="live() && !muted()"
+           [class.ptt-ring-outer--rx]="live() && someoneSpeaking()">
         <div class="ptt-ring-inner"
-             [class.ptt-ring-inner--tx]="state() === 'transmitting'">
+             [class.ptt-ring-inner--tx]="live()">
           <button
             class="ptt-btn"
-            [class.ptt-btn--transmitting]="state() === 'transmitting'"
-            [class.ptt-btn--receiving]="state() === 'receiving'"
-            [class.ptt-btn--muted]="isMuted()"
-            [disabled]="isMuted()"
-            (pointerdown)="onPttDown()"
-            (pointerup)="onPttUp()"
-            (pointerleave)="onPttUp()"
-            (pointercancel)="onPttUp()"
+            [class.ptt-btn--transmitting]="live()"
+            [class.ptt-btn--muted]="live() && muted()"
+            (click)="toggleLive()"
           >
-            @if (isMuted()) {
+            @if (live()) {
               <svg width="38" height="38" viewBox="0 0 24 24" fill="currentColor">
-                <path d="M19 11h-1.7c0 .74-.16 1.43-.43 2.05l1.23 1.23c.56-.98.9-2.09.9-3.28zm-4.02.17c0-.06.02-.11.02-.17V5c0-1.66-1.34-3-3-3S9 3.34 9 5v.18l5.98 5.99zM4.27 3L3 4.27l6.01 6.01V11c0 1.66 1.33 3 2.99 3 .22 0 .44-.03.65-.08l1.66 1.66c-.71.33-1.5.52-2.31.52-2.76 0-5.3-2.1-5.3-5.1H5c0 3.41 2.72 6.23 6 6.72V21h2v-3.28c.91-.13 1.77-.45 2.54-.9L19.73 21 21 19.73 4.27 3z"/>
+                <path d="M6 6h12v12H6z"/>
               </svg>
             } @else {
               <svg width="38" height="38" viewBox="0 0 24 24" fill="currentColor">
@@ -72,19 +77,14 @@
         </div>
       </div>
 
-      <!-- State label + TX timer -->
+      <!-- State label -->
       <div class="ptt-label-row">
-        @switch (state()) {
-          @case ('transmitting') {
-            <span class="ptt-label ptt-label--tx">TRANSMITTING</span>
-            <span class="tx-timer">{{ formatTx(txMs()) }}</span>
-          }
-          @case ('receiving') {
-            <span class="ptt-label ptt-label--rx">RECEIVING</span>
-          }
-          @default {
-            <span class="ptt-label ptt-label--idle">{{ isMuted() ? 'MUTED — TAP TO UNMUTE' : 'HOLD TO TALK' }}</span>
-          }
+        @if (!live()) {
+          <span class="ptt-label ptt-label--idle">TAP TO GO LIVE</span>
+        } @else if (muted()) {
+          <span class="ptt-label ptt-label--idle">LIVE — MIC MUTED</span>
+        } @else {
+          <span class="ptt-label ptt-label--tx">LIVE — FULL DUPLEX</span>
         }
       </div>
     </div>
@@ -113,14 +113,15 @@
         <span class="volume-pct">{{ volume() }}%</span>
       </div>
 
-      <!-- Mute toggle -->
+      <!-- Mute toggle (only meaningful while live) -->
       <button
         class="rm-card control-card control-card--btn"
-        [class.control-card--muted]="isMuted()"
+        [class.control-card--muted]="muted()"
+        [disabled]="!live()"
         (click)="toggleMute()"
       >
         <div class="control-icon">
-          @if (isMuted()) {
+          @if (muted()) {
             <svg width="22" height="22" viewBox="0 0 24 24" fill="currentColor">
               <path d="M19 11h-1.7c0 .74-.16 1.43-.43 2.05l1.23 1.23c.56-.98.9-2.09.9-3.28zm-4.02.17c0-.06.02-.11.02-.17V5c0-1.66-1.34-3-3-3S9 3.34 9 5v.18l5.98 5.99zM4.27 3L3 4.27l6.01 6.01V11c0 1.66 1.33 3 2.99 3 .22 0 .44-.03.65-.08l1.66 1.66c-.71.33-1.5.52-2.31.52-2.76 0-5.3-2.1-5.3-5.1H5c0 3.41 2.72 6.23 6 6.72V21h2v-3.28c.91-.13 1.77-.45 2.54-.9L19.73 21 21 19.73 4.27 3z"/>
             </svg>
@@ -130,7 +131,7 @@
             </svg>
           }
         </div>
-        <div class="control-label">{{ isMuted() ? 'Unmute' : 'Mute' }}</div>
+        <div class="control-label">{{ muted() ? 'Unmute' : 'Mute' }}</div>
       </button>
     </div>
 
@@ -139,7 +140,7 @@
       <div class="members-strip">
         @for (m of members(); track m.id) {
           <div class="member-chip">
-            <div class="member-avatar" [class.member-avatar--speaking]="speakerName() === m.name">
+            <div class="member-avatar" [class.member-avatar--speaking]="live() && someoneSpeaking() && m.id !== 'self'">
               {{ m.avatarInitials }}
             </div>
             <span class="rm-dot"
@@ -151,26 +152,14 @@
       </div>
     }
 
-    <!-- Speaker history log -->
-    @if (speakerLog().length > 0) {
+    @if (live()) {
       <div class="speaker-log animate-fade-in">
-        <div class="rm-section-label">Recent</div>
-        @for (entry of speakerLog(); track entry.startedAt) {
-          <div class="log-row">
-            <span class="log-name">{{ entry.name }}</span>
-            <span class="log-time">{{ formatLogTime(entry.startedAt) }}</span>
-          </div>
-        }
+        <div class="rm-section-label">Voice channel</div>
+        <div class="log-row">
+          <span class="log-name">{{ peerCount() }} connection{{ peerCount() === 1 ? '' : 's' }}</span>
+          <span class="log-time">{{ muted() ? 'muted' : 'open mic' }}</span>
+        </div>
       </div>
     }
-
-    <!-- Dev helper -->
-    <button
-      class="rm-btn rm-btn--ghost"
-      style="align-self:center;font-size:0.72rem;min-height:36px;"
-      (click)="simulateIncoming()"
-    >
-      Simulate Incoming
-    </button>
   </div>
 </div>

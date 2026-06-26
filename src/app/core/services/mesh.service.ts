@@ -6,6 +6,7 @@ import { P2pSocket } from '../plugins/p2p-socket.plugin';
 import { DataBusService } from './data-bus.service';
 import { SettingsService } from './settings.service';
 import { PttService } from './ptt.service';
+import { RtcVoiceService } from './rtc-voice.service';
 
 interface BeaconPayload {
   n:  string;             // rider name  (shortened key to fit 20-byte BLE advert limit)
@@ -35,6 +36,7 @@ export class MeshService implements OnDestroy {
   private _settings = inject(SettingsService);
   private _bus      = inject(DataBusService);
   private _ptt      = inject(PttService);
+  private _rtc      = inject(RtcVoiceService);
 
   readonly selfRider = signal<Rider>((() => {
     const name = this._settings.riderName() || 'Rider';
@@ -138,18 +140,29 @@ export class MeshService implements OnDestroy {
 
     const socketConnListener = await P2pSocket.addListener('peerConnected', ev => {
       const addr = ev.peerAddress;
-      // Find the rider whose Wi-Fi address matches and register their name with PTT
+      // Resolve a display name for this socket from the discovered peer records.
+      let name = addr;
       this._peers.forEach(rec => {
         if (rec.wifiAddress === addr) {
-          const name = rec.beacon?.n || rec.deviceName?.replace('rath-', '') || addr;
+          name = rec.beacon?.n || rec.deviceName?.replace('rath-', '') || addr;
           this._ptt.registerPeer(addr, name);
         }
       });
+
+      // Full-duplex voice: the leader treats every new socket as a member; a
+      // member treats its single socket as the leader. Signalling rides this
+      // same TCP link via DataBus, so the PC is created once it is up.
+      if (this.selfRider().role === 'leader') {
+        this._rtc.onMemberConnected(addr, name);
+      } else {
+        this._rtc.onConnectedToLeader(addr, name === addr ? 'Leader' : name);
+      }
     });
     this._listeners.push(socketConnListener);
 
     const socketDiscListener = await P2pSocket.addListener('peerDisconnected', ev => {
       this._ptt.unregisterPeer(ev.peerAddress);
+      this._rtc.onPeerDisconnected(ev.peerAddress);
     });
     this._listeners.push(socketDiscListener);
 
@@ -231,6 +244,7 @@ export class MeshService implements OnDestroy {
   }
 
   leaveGroup(): void {
+    this._rtc.leaveVoice();
     this.activeGroup.set(null);
     this.selfRider.update(r => ({ ...r, role: 'solo' }));
     this._advertise();
