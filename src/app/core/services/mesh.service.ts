@@ -53,6 +53,11 @@ export class MeshService implements OnDestroy {
   private _listeners: Array<{ remove(): void }> = [];
   private _busTeardown: (() => void) | null = null;
 
+  // Guard so the two paths that can open the member→owner TCP socket
+  // (connectionChanged listener + _connectToGroupOwner poll) never double-connect.
+  private _socketConnecting = false;
+  private _socketConnected  = false;
+
   constructor() {
     this._busTeardown = this._bus.register('location', (payload, peerAddress) => {
       try {
@@ -135,6 +140,13 @@ export class MeshService implements OnDestroy {
 
     const connListener = await WifiDirect.addListener('connectionChanged', info => {
       this.meshConnected.set(info.groupFormed);
+      if (!info.groupFormed) { this._socketConnected = false; return; }
+      // Member side: the moment the Wi-Fi Direct group forms, open the TCP socket
+      // to the group owner (leader). The leader runs the server and skips this.
+      // This covers leader-initiated formation, which the poll-only path missed.
+      if (!info.isGroupOwner && this.activeGroup() && this.selfRider().role !== 'leader') {
+        this._ensureSocketToOwner(info.groupOwnerAddress);
+      }
     });
     this._listeners.push(connListener);
 
@@ -245,6 +257,7 @@ export class MeshService implements OnDestroy {
 
   leaveGroup(): void {
     this._rtc.leaveVoice();
+    this._socketConnected = false;
     this.activeGroup.set(null);
     this.selfRider.update(r => ({ ...r, role: 'solo' }));
     this._advertise();
@@ -272,19 +285,50 @@ export class MeshService implements OnDestroy {
     return this._peers.get(riderId)?.wifiAddress;
   }
 
+  /** BLE MAC of a discovered peer — used to push invites over GATT.
+   *  riderId is already the BLE canonical key, but fall back to the record. */
+  getBleAddress(riderId: string): string | undefined {
+    return this._peers.get(riderId)?.bleAddress ?? riderId;
+  }
+
+  /** Resolve a rider's display name from a raw BLE MAC (invite sender). */
+  getRiderNameByBleAddress(bleAddress: string): string | undefined {
+    for (const [, rec] of this._peers) {
+      if (rec.bleAddress === bleAddress) return rec.beacon?.n || rec.deviceName?.replace('rath-', '');
+    }
+    return undefined;
+  }
+
   isInGroup(riderId: string): boolean {
     return this.activeGroup()?.memberIds.includes(riderId) ?? false;
   }
 
   // ─── Private helpers ──────────────────────────────────────────────────────
 
+  /** Open the member→group-owner TCP socket exactly once. Safe to call from
+   *  multiple paths (connectionChanged listener and the poll below). */
+  private async _ensureSocketToOwner(host: string | null | undefined): Promise<void> {
+    if (!host) return;
+    if (this._socketConnected || this._socketConnecting) return;
+    this._socketConnecting = true;
+    try {
+      await P2pSocket.connect({ host });
+      this._socketConnected = true;
+      this.meshConnected.set(true);
+    } catch {
+      // will retry on the next connectionChanged / poll tick
+    } finally {
+      this._socketConnecting = false;
+    }
+  }
+
   private async _connectToGroupOwner(): Promise<void> {
+    if (this._socketConnected) return;
     try {
       // First check if we're already in a Wi-Fi Direct group (e.g. from a prior connect)
       const existingInfo = await WifiDirect.requestConnectionInfo();
       if (existingInfo.groupFormed && existingInfo.groupOwnerAddress) {
-        await P2pSocket.connect({ host: existingInfo.groupOwnerAddress });
-        this.meshConnected.set(true);
+        await this._ensureSocketToOwner(existingInfo.groupOwnerAddress);
         return;
       }
 
@@ -304,14 +348,14 @@ export class MeshService implements OnDestroy {
       // Initiate Wi-Fi Direct group formation — connection info arrives via broadcast
       await WifiDirect.connect({ deviceAddress: leaderWifiAddr });
 
-      // Wait up to 15 s for group to form, then connect TCP socket
+      // Wait up to 15 s for group to form, then connect TCP socket. The
+      // connectionChanged listener may beat us to it — _ensureSocketToOwner dedupes.
       let attempts = 0;
       const poll = async (): Promise<void> => {
-        if (attempts++ > 15) return;
+        if (attempts++ > 15 || this._socketConnected) return;
         const info = await WifiDirect.requestConnectionInfo();
         if (info.groupFormed && info.groupOwnerAddress) {
-          await P2pSocket.connect({ host: info.groupOwnerAddress });
-          this.meshConnected.set(true);
+          await this._ensureSocketToOwner(info.groupOwnerAddress);
           return;
         }
         await new Promise(r => setTimeout(r, 1000));
@@ -330,12 +374,15 @@ export class MeshService implements OnDestroy {
     if (d.payload) {
       try {
         const raw = JSON.parse(d.payload);
-        // Support both compact keys (n/s/b/g) and legacy long keys (name/status/battery/groupId)
+        // Support both compact keys (n/s/b/g) and legacy long keys (name/status/battery/groupId).
+        // Merge into any existing beacon so a later (e.g. GATT-enrichment) emit that
+        // omits a field — most importantly the group passcode `g` — can't erase it.
+        const prev = record.beacon;
         record.beacon = {
-          n: raw.n ?? raw.name ?? '',
-          s: raw.s ?? raw.status ?? 'offline',
-          b: raw.b ?? raw.battery,
-          g: raw.g ?? raw.groupId,
+          n: raw.n ?? raw.name    ?? prev?.n ?? '',
+          s: raw.s ?? raw.status  ?? prev?.s ?? 'offline',
+          b: raw.b ?? raw.battery ?? prev?.b,
+          g: raw.g ?? raw.groupId ?? prev?.g,
         };
         // Use the rider's actual name as the merge key if available
         if (record.beacon.n) {

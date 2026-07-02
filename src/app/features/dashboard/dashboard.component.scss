@@ -138,10 +138,10 @@
   text-align: center;
 }
 
-.quick-card--blue   .quick-card__icon { background: rgba(0, 229, 255, 0.12);   color: var(--rm-cyan);    }
+.quick-card--blue   .quick-card__icon { background: rgba(140, 160, 255, 0.12); color: var(--rm-cyan);    }
 .quick-card--orange .quick-card__icon { background: var(--rm-orange-glow);     color: var(--rm-orange);  }
 .quick-card--green  .quick-card__icon { background: var(--rm-green-glow);      color: var(--rm-green);   }
-.quick-card--purple .quick-card__icon { background: rgba(107, 70, 255, 0.15);  color: var(--rm-purple);  }
+.quick-card--purple .quick-card__icon { background: rgba(155, 140, 255, 0.15); color: var(--rm-purple);  }
 
 /* Riders */
 .riders-list {

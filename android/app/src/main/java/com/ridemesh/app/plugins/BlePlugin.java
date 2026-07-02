@@ -33,6 +33,8 @@ import com.getcapacitor.annotation.CapacitorPlugin;
 import com.getcapacitor.annotation.Permission;
 import com.getcapacitor.annotation.PermissionCallback;
 
+import org.json.JSONObject;
+
 import java.nio.charset.StandardCharsets;
 import java.util.ArrayList;
 import java.util.List;
@@ -53,6 +55,13 @@ public class BlePlugin extends Plugin {
     private static final UUID   SERVICE_UUID = UUID.fromString("0000FEED-0000-1000-8000-00805F9B34FB");
     // GATT characteristic that holds the full beacon JSON (no size limit)
     private static final UUID   BEACON_CHAR  = UUID.fromString("0000BEA0-0000-1000-8000-00805F9B34FB");
+    // GATT characteristic scanners WRITE to, to push a group invite / response
+    private static final UUID   INVITE_CHAR  = UUID.fromString("0000BEA1-0000-1000-8000-00805F9B34FB");
+
+    // Manufacturer-specific advertisement data. Company id 0xFFFF is the reserved
+    // "for testing" id; the leading magic byte lets us reject foreign 0xFFFF ads.
+    private static final int    MANUFACTURER_ID = 0xFFFF;
+    private static final byte   BEACON_MAGIC    = (byte) 0x52; // 'R'
 
     private BluetoothManager      btManager;
     private BluetoothAdapter      btAdapter;
@@ -64,8 +73,10 @@ public class BlePlugin extends Plugin {
     private boolean               isScanning    = false;
     private boolean               isAdvertising = false;
     private byte[]                cachedBeaconPayload = new byte[0];
-    // Track addresses currently being GATT-read to avoid concurrent connection storms
+    // Track addresses with an in-flight GATT op (read or invite write) to avoid
+    // concurrent connection storms to the same device.
     private final java.util.Set<String> pendingGattReads = java.util.Collections.synchronizedSet(new java.util.HashSet<>());
+    private final android.os.Handler mainHandler = new android.os.Handler(android.os.Looper.getMainLooper());
 
     private PluginCall savedScanCall;
     private PluginCall savedAdvertiseCall;
@@ -235,14 +246,21 @@ public class BlePlugin extends Plugin {
             .setTimeout(0)
             .build();
 
-        // Only advertise the service UUID as a presence marker — no service data.
-        // Many Android chipsets silently drop or corrupt packets when addServiceData
-        // and addServiceUuid use the same UUID, causing other devices to miss us.
-        // Full beacon JSON is served via GATT characteristic read instead.
-        AdvertiseData advData = new AdvertiseData.Builder()
+        // Advertise the service UUID as a presence marker AND a compact beacon in
+        // manufacturer-specific data (a separate AD structure — it does NOT collide
+        // with the service UUID the way addServiceData did). This carries status,
+        // battery and the group passcode without needing a GATT read, so group
+        // discovery/join works even when phone-to-phone GATT connections fail.
+        // The full name is still served via the GATT characteristic as a fallback.
+        AdvertiseData.Builder advBuilder = new AdvertiseData.Builder()
             .addServiceUuid(new ParcelUuid(SERVICE_UUID))
-            .setIncludeDeviceName(false)
-            .build();
+            .setIncludeDeviceName(false);
+
+        byte[] mfg = encodeBeacon(payload);
+        if (mfg != null) {
+            advBuilder.addManufacturerData(MANUFACTURER_ID, mfg);
+        }
+        AdvertiseData advData = advBuilder.build();
 
         advertiseCallback = new AdvertiseCallback() {
             @Override public void onStartSuccess(AdvertiseSettings s) {
@@ -263,6 +281,68 @@ public class BlePlugin extends Plugin {
         call.resolve();
     }
 
+    // Build the compact manufacturer-data beacon from the JSON payload the JS layer
+    // sends. Layout (after the 2-byte company id Android prepends):
+    //   [0] magic 0x52  [1] status(0/1/2)  [2] battery(0-100, 0xFF=unknown)
+    //   [3..6] passcode 4 ASCII digits or 0x00 x4  [7..] name UTF-8 (<=11 bytes)
+    // Returns null if the payload can't be parsed.
+    private byte[] encodeBeacon(String jsonPayload) {
+        if (jsonPayload == null || jsonPayload.isEmpty()) return null;
+        try {
+            JSONObject o = new JSONObject(jsonPayload);
+            String name = o.optString("n", "");
+            String s    = o.optString("s", "offline");
+            int battery = o.optInt("b", -1);
+            String g    = o.optString("g", "");
+
+            byte status = (byte) ("online".equals(s) ? 1 : "away".equals(s) ? 2 : 0);
+            byte batt   = (byte) (battery >= 0 && battery <= 100 ? battery : 0xFF);
+
+            byte[] nameBytes = name.getBytes(StandardCharsets.UTF_8);
+            int nameLen = Math.min(nameBytes.length, 11);
+
+            byte[] out = new byte[7 + nameLen];
+            out[0] = BEACON_MAGIC;
+            out[1] = status;
+            out[2] = batt;
+            // passcode: exactly 4 ASCII digits, else zero-filled
+            if (g.length() == 4) {
+                byte[] gb = g.getBytes(StandardCharsets.US_ASCII);
+                out[3] = gb[0]; out[4] = gb[1]; out[5] = gb[2]; out[6] = gb[3];
+            }
+            System.arraycopy(nameBytes, 0, out, 7, nameLen);
+            return out;
+        } catch (Exception e) {
+            return null;
+        }
+    }
+
+    // Decode a manufacturer-data beacon back into the same compact JSON keys the JS
+    // layer already parses (n/s/b/g). Returns null if it isn't one of our beacons.
+    private String decodeBeacon(byte[] mfg) {
+        if (mfg == null || mfg.length < 7 || mfg[0] != BEACON_MAGIC) return null;
+        try {
+            String status = mfg[1] == 1 ? "online" : mfg[1] == 2 ? "away" : "offline";
+            int batt = mfg[2] & 0xFF;
+            String g = "";
+            if (mfg[3] != 0) {
+                g = new String(mfg, 3, 4, StandardCharsets.US_ASCII);
+            }
+            String name = mfg.length > 7
+                ? new String(mfg, 7, mfg.length - 7, StandardCharsets.UTF_8)
+                : "";
+
+            JSONObject o = new JSONObject();
+            o.put("n", name);
+            o.put("s", status);
+            if (batt != 0xFF) o.put("b", batt);
+            if (!g.isEmpty())  o.put("g", g);
+            return o.toString();
+        } catch (Exception e) {
+            return null;
+        }
+    }
+
     // ─── stopAdvertise ────────────────────────────────────────────────────────
 
     @PluginMethod
@@ -280,6 +360,85 @@ public class BlePlugin extends Plugin {
         JSObject result = new JSObject();
         result.put("enabled", btAdapter != null && btAdapter.isEnabled());
         call.resolve(result);
+    }
+
+    // ─── sendInvite (GATT write to a peer's INVITE_CHAR) ──────────────────────
+    //
+    // Pushes a small (<=20 byte) invite/response payload to another rider without
+    // needing a prior Wi-Fi Direct / TCP link. The receiver's GATT server surfaces
+    // it via the "inviteReceived" event.
+
+    @PluginMethod
+    public void sendInvite(PluginCall call) {
+        String deviceAddress = call.getString("deviceAddress");
+        String payload       = call.getString("payload", "");
+        if (deviceAddress == null || deviceAddress.isEmpty()) { call.reject("deviceAddress required"); return; }
+        if (btAdapter == null) { call.reject("Bluetooth unavailable"); return; }
+        if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.S &&
+            getContext().checkSelfPermission(Manifest.permission.BLUETOOTH_CONNECT) != PackageManager.PERMISSION_GRANTED) {
+            call.reject("BLUETOOTH_CONNECT permission required");
+            return;
+        }
+        byte[] data = (payload != null ? payload : "").getBytes(StandardCharsets.UTF_8);
+        attemptInviteWrite(deviceAddress, data, call, 1); // one retry
+    }
+
+    private void attemptInviteWrite(String deviceAddress, byte[] data, PluginCall call, int retriesLeft) {
+        final BluetoothDevice device;
+        try { device = btAdapter.getRemoteDevice(deviceAddress); }
+        catch (Exception e) { call.reject("Invalid device address"); return; }
+
+        // Serialize against scanner reads / other writes to the same device.
+        if (!pendingGattReads.add(deviceAddress)) {
+            mainHandler.postDelayed(() -> attemptInviteWrite(deviceAddress, data, call, retriesLeft), 400);
+            return;
+        }
+
+        final java.util.concurrent.atomic.AtomicBoolean settled = new java.util.concurrent.atomic.AtomicBoolean(false);
+
+        device.connectGatt(getContext(), false, new android.bluetooth.BluetoothGattCallback() {
+            private void retryOrFail(BluetoothGatt gatt) {
+                pendingGattReads.remove(deviceAddress);
+                try { if (gatt != null) gatt.close(); } catch (Exception ignored) {}
+                if (settled.getAndSet(true)) return;
+                if (retriesLeft > 0) {
+                    mainHandler.postDelayed(() -> attemptInviteWrite(deviceAddress, data, call, retriesLeft - 1), 400);
+                } else {
+                    call.reject("Invite write failed");
+                }
+            }
+            @Override
+            public void onConnectionStateChange(BluetoothGatt gatt, int status, int newState) {
+                if (newState == BluetoothGatt.STATE_CONNECTED) {
+                    gatt.discoverServices();
+                } else if (newState == BluetoothGatt.STATE_DISCONNECTED) {
+                    retryOrFail(gatt);
+                }
+            }
+            @Override
+            public void onServicesDiscovered(BluetoothGatt gatt, int status) {
+                BluetoothGattService svc = gatt.getService(SERVICE_UUID);
+                BluetoothGattCharacteristic ch = svc != null ? svc.getCharacteristic(INVITE_CHAR) : null;
+                if (ch == null) { gatt.disconnect(); return; }
+                ch.setWriteType(BluetoothGattCharacteristic.WRITE_TYPE_DEFAULT);
+                ch.setValue(data);
+                if (!gatt.writeCharacteristic(ch)) { gatt.disconnect(); }
+            }
+            @Override
+            public void onCharacteristicWrite(BluetoothGatt gatt, BluetoothGattCharacteristic ch, int status) {
+                pendingGattReads.remove(deviceAddress);
+                boolean ok = status == BluetoothGatt.GATT_SUCCESS;
+                try { gatt.disconnect(); gatt.close(); } catch (Exception ignored) {}
+                if (settled.getAndSet(true)) return;
+                if (ok) {
+                    call.resolve();
+                } else if (retriesLeft > 0) {
+                    mainHandler.postDelayed(() -> attemptInviteWrite(deviceAddress, data, call, retriesLeft - 1), 400);
+                } else {
+                    call.reject("Invite write failed");
+                }
+            }
+        });
     }
 
     // ─── GATT server (serves full beacon payload to connecting scanners) ──────
@@ -303,6 +462,13 @@ public class BlePlugin extends Plugin {
         characteristic.setValue(payload);
         service.addCharacteristic(characteristic);
 
+        // Writable characteristic that peers push group invites / responses to.
+        BluetoothGattCharacteristic inviteChar = new BluetoothGattCharacteristic(
+            INVITE_CHAR,
+            BluetoothGattCharacteristic.PROPERTY_WRITE | BluetoothGattCharacteristic.PROPERTY_WRITE_NO_RESPONSE,
+            BluetoothGattCharacteristic.PERMISSION_WRITE);
+        service.addCharacteristic(inviteChar);
+
         gattServer = btManager.openGattServer(getContext(), new BluetoothGattServerCallback() {
             @Override
             public void onCharacteristicReadRequest(BluetoothDevice device, int requestId,
@@ -315,8 +481,25 @@ public class BlePlugin extends Plugin {
                 gattServer.sendResponse(device, requestId, BluetoothGatt.GATT_SUCCESS, offset, response);
             }
             @Override
+            public void onCharacteristicWriteRequest(BluetoothDevice device, int requestId,
+                    BluetoothGattCharacteristic characteristic, boolean preparedWrite,
+                    boolean responseNeeded, int offset, byte[] value) {
+                if (INVITE_CHAR.equals(characteristic.getUuid())) {
+                    if (responseNeeded && gattServer != null) {
+                        gattServer.sendResponse(device, requestId, BluetoothGatt.GATT_SUCCESS, offset, value);
+                    }
+                    String payloadStr = value != null ? new String(value, StandardCharsets.UTF_8) : "";
+                    JSObject ev = new JSObject();
+                    ev.put("payload",     payloadStr);
+                    ev.put("fromAddress", device.getAddress());
+                    notifyListeners("inviteReceived", ev);
+                } else if (responseNeeded && gattServer != null) {
+                    gattServer.sendResponse(device, requestId, BluetoothGatt.GATT_FAILURE, offset, null);
+                }
+            }
+            @Override
             public void onConnectionStateChange(BluetoothDevice device, int status, int newState) {
-                // No-op — we only serve reads, no persistent connection needed
+                // No-op — we only serve reads/writes, no persistent connection needed
             }
         });
 
@@ -355,13 +538,13 @@ public class BlePlugin extends Plugin {
             }
         } catch (Exception ignored) {}
 
-        // Try service-data fast path (first 20 bytes embedded in the advertisement)
+        // Fast path: decode the compact beacon carried in manufacturer-specific data.
+        // This gives us status/battery/passcode without any GATT connection.
         String fastPayload = "";
         if (record != null) {
-            byte[] serviceData = record.getServiceData(new ParcelUuid(SERVICE_UUID));
-            if (serviceData != null) {
-                fastPayload = new String(serviceData, StandardCharsets.UTF_8);
-            }
+            byte[] mfg = record.getManufacturerSpecificData(MANUFACTURER_ID);
+            String decoded = decodeBeacon(mfg);
+            if (decoded != null) fastPayload = decoded;
         }
 
         final String finalDeviceName = deviceName;

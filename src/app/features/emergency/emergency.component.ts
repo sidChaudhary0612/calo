@@ -149,7 +149,7 @@ export class EmergencyComponent implements OnDestroy {
     const selfLoc = this.loc.currentLocation();
     if (!this._sosMap || !selfLoc) return;
     const dot = document.createElement('div');
-    dot.style.cssText = 'width:14px;height:14px;border-radius:50%;background:#6B46FF;border:2px solid #fff;box-shadow:0 0 8px rgba(107,70,255,0.6);';
+    dot.style.cssText = 'width:14px;height:14px;border-radius:50%;background:#9b8cff;border:2px solid #fff;box-shadow:0 0 8px rgba(155,140,255,0.6);';
     this._selfMarker = new maplibregl.Marker({ element: dot, anchor: 'center' })
       .setLngLat([selfLoc.lng, selfLoc.lat])
       .addTo(this._sosMap);

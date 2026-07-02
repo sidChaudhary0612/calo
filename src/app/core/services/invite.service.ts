@@ -2,6 +2,7 @@ import { Injectable, inject, signal, OnDestroy } from '@angular/core';
 import { DataBusService } from './data-bus.service';
 import { MeshService } from './mesh.service';
 import { SettingsService } from './settings.service';
+import { BlePlugin, InviteReceivedEvent } from '../plugins/ble.plugin';
 
 export interface InvitePayload {
   type:        'invite' | 'response';
@@ -32,8 +33,15 @@ export class InviteService implements OnDestroy {
   private _mesh     = inject(MeshService);
   private _settings = inject(SettingsService);
   private _teardown: (() => void) | null = null;
+  private _bleListener: { remove(): void } | null = null;
 
   constructor() {
+    // Primary path: invites/responses delivered over BLE GATT write. This works
+    // before any Wi-Fi Direct / TCP link exists, so it's the reliable channel.
+    BlePlugin.addListener('inviteReceived', (e: InviteReceivedEvent) => this._onGattInvite(e))
+      .then(l => { this._bleListener = l; });
+
+    // Secondary path: kept for when a socket already exists (harmless otherwise).
     this._teardown = this._bus.register('invite', (payload, peerAddress) => {
       try {
         const msg: InvitePayload = JSON.parse(atob(payload));
@@ -43,35 +51,29 @@ export class InviteService implements OnDestroy {
     });
   }
 
-  // ─── Leader sends invite to a nearby rider ────────────────────────────────
+  // ─── Leader sends invite to a nearby rider (over BLE GATT) ────────────────
 
   async sendInvite(riderId: string): Promise<void> {
     const group = this._mesh.activeGroup();
-    if (!group) return;
+    if (!group?.passcode) return;
 
-    const self = this._mesh.selfRider();
-    const wifiAddr = this._mesh.getWifiAddress(riderId);
-    if (!wifiAddr) return;
+    const bleAddr = this._mesh.getBleAddress(riderId);
+    if (!bleAddr) return;
 
     this._setSentState(riderId, 'sending');
 
-    // Ensure Wi-Fi Direct connection exists first
+    // Compact wire payload: "J" + passcode(4) + groupName (<=14). The invitee only
+    // needs the passcode to auto-join; fromName is resolved locally from its beacon.
+    const wire = 'J' + group.passcode + group.name.slice(0, 14);
+
     try {
-      await this._mesh.connectToPeer(riderId);
-    } catch { /* already connected */ }
-
-    const invite: InvitePayload = {
-      type:      'invite',
-      fromId:    this._mesh.selfId,
-      fromName:  self.name,
-      groupId:   group.id,
-      groupName: group.name,
-      passcode:  group.passcode ?? '',
-      ts:        Date.now(),
-    };
-
-    this._bus.send('invite', invite, wifiAddr);
-    this._setSentState(riderId, 'sent');
+      await BlePlugin.sendInvite({ deviceAddress: bleAddr, payload: wire });
+      this._setSentState(riderId, 'sent');
+    } catch {
+      this._setSentState(riderId, 'declined');
+      setTimeout(() => this._clearSentState(riderId), 3000);
+      return;
+    }
 
     // Auto-clear sent state after 30s if no response
     setTimeout(() => {
@@ -91,21 +93,13 @@ export class InviteService implements OnDestroy {
 
     const { payload, peerAddress } = pending;
 
-    // Join the group using the passcode
+    // Join the group using the passcode — now reliable via the beacon (Fix A) and
+    // the socket-on-connect wiring (Fix C).
     this._mesh.joinGroup(payload.passcode);
 
-    // Send acceptance back to the leader
-    const response: InvitePayload = {
-      type:      'response',
-      fromId:    this._mesh.selfId,
-      fromName:  this._mesh.selfRider().name,
-      groupId:   payload.groupId,
-      groupName: payload.groupName,
-      passcode:  payload.passcode,
-      accepted:  true,
-      ts:        Date.now(),
-    };
-    this._bus.send('invite', response, peerAddress);
+    // Tell the leader we accepted (best-effort; even if this write is lost, our
+    // post-join beacon carrying g=passcode triggers the leader's auto-join).
+    BlePlugin.sendInvite({ deviceAddress: peerAddress, payload: 'A' + payload.passcode }).catch(() => {});
     this.pendingInvite.set(null);
   }
 
@@ -116,19 +110,48 @@ export class InviteService implements OnDestroy {
     if (!pending) return;
 
     const { payload, peerAddress } = pending;
-
-    const response: InvitePayload = {
-      type:      'response',
-      fromId:    this._mesh.selfId,
-      fromName:  this._mesh.selfRider().name,
-      groupId:   payload.groupId,
-      groupName: payload.groupName,
-      passcode:  payload.passcode,
-      accepted:  false,
-      ts:        Date.now(),
-    };
-    this._bus.send('invite', response, peerAddress);
+    BlePlugin.sendInvite({ deviceAddress: peerAddress, payload: 'D' + payload.passcode }).catch(() => {});
     this.pendingInvite.set(null);
+  }
+
+  // ─── GATT invite/response handling (primary path) ─────────────────────────
+
+  private _onGattInvite(e: InviteReceivedEvent): void {
+    const kind = e.payload.charAt(0);   // 'J' invite | 'A' accept | 'D' decline
+    const passcode = e.payload.slice(1, 5);
+
+    if (kind === 'J') {
+      // Incoming invite → show the banner (ignored if we're already in a group).
+      if (this._mesh.activeGroup()) return;
+      const groupName = e.payload.slice(5) || 'Ride Group';
+      const fromName  = this._mesh.getRiderNameByBleAddress(e.fromAddress) || 'A rider';
+      const invite: InvitePayload = {
+        type:      'invite',
+        fromId:    e.fromAddress,
+        fromName,
+        groupId:   'g-' + passcode,
+        groupName,
+        passcode,
+        ts:        Date.now(),
+      };
+      this.pendingInvite.set({ payload: invite, peerAddress: e.fromAddress });
+      setTimeout(() => {
+        const cur = this.pendingInvite();
+        if (cur?.payload.ts === invite.ts) this.pendingInvite.set(null);
+      }, 30000);
+      return;
+    }
+
+    // Response to an invite WE sent. riderId == sender's BLE MAC == sentState key.
+    const riderId = e.fromAddress;
+    if (kind === 'A') {
+      this._setSentState(riderId, 'accepted');
+      this._mesh.addPeerToGroup(riderId);
+      setTimeout(() => this._clearSentState(riderId), 4000);
+    } else if (kind === 'D') {
+      this._setSentState(riderId, 'declined');
+      setTimeout(() => this._clearSentState(riderId), 3000);
+    }
   }
 
   // ─── Private ─────────────────────────────────────────────────────────────
@@ -171,5 +194,6 @@ export class InviteService implements OnDestroy {
 
   ngOnDestroy(): void {
     this._teardown?.();
+    this._bleListener?.remove();
   }
 }

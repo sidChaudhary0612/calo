@@ -28,7 +28,7 @@
 }
 
 .radar--scanning .radar__ring {
-  border-color: rgba(107, 70, 255, 0.2);
+  border-color: rgba(155, 140, 255, 0.2);
   animation: ring-pulse 2s ease-in-out infinite;
 
   &--2 { animation-delay: 0.3s; }
@@ -47,7 +47,7 @@
   top: 0;
   left: 50%;
   transform-origin: bottom left;
-  background: conic-gradient(from 0deg, transparent 70%, rgba(107, 70, 255, 0.35) 100%);
+  background: conic-gradient(from 0deg, transparent 70%, rgba(155, 140, 255, 0.35) 100%);
   border-radius: 0 100% 0 0;
   display: none;
 
@@ -289,7 +289,7 @@
   transition: background 0.2s, color 0.2s;
 
   &--sent {
-    background: rgba(107, 70, 255, 0.15);
+    background: rgba(155, 140, 255, 0.15);
     color: var(--rm-primary, #6B46FF);
     border-color: var(--rm-primary, #6B46FF);
   }

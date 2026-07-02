@@ -217,7 +217,7 @@ export class MapService {
   drawRoute(coords: [number, number][]): void {
     if (!this._map || !this.isReady()) return;
     const map    = this._map;
-    const colour = cssVar('--rm-primary', '#6B46FF');
+    const colour = cssVar('--rm-primary', '#9b8cff');
 
     if (this._routeLoaded) {
       (map.getSource('rm-route') as maplibregl.GeoJSONSource)?.setData(this._routeGeoJson(coords));
@@ -270,8 +270,8 @@ export class MapService {
   // ─── Marker DOM elements ───────────────────────────────────────────────
 
   private _makeSelfElement(): HTMLElement {
-    const accent = cssVar('--rm-primary', '#6B46FF');
-    const glow   = cssVar('--rm-primary-glow', 'rgba(107,70,255,0.3)');
+    const accent = cssVar('--rm-primary', '#9b8cff');
+    const glow   = cssVar('--rm-primary-glow', 'rgba(155,140,255,0.3)');
 
     const el = document.createElement('div');
     el.style.cssText = 'position:relative;width:24px;height:24px;';
@@ -288,9 +288,9 @@ export class MapService {
 
   private _makeRiderElement(initials: string): HTMLElement {
     const bg     = cssVar('--bg-card',   '#131320');
-    const border = cssVar('--rm-cyan',   '#00E5FF');
-    const colour = cssVar('--rm-cyan',   '#00E5FF');
-    const font   = cssVar('--font-display', '"Space Grotesk",sans-serif');
+    const border = cssVar('--rm-cyan',   '#8ca0ff');
+    const colour = cssVar('--rm-cyan',   '#8ca0ff');
+    const font   = cssVar('--font-display', '"Manrope",sans-serif');
 
     const el = document.createElement('div');
     el.style.cssText = [

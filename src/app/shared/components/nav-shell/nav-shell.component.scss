@@ -103,7 +103,7 @@
   padding: 12px 16px;
   background: var(--bg-card, #1a1a2e);
   border-bottom: 1px solid var(--rm-primary, #6B46FF);
-  box-shadow: 0 4px 24px rgba(107, 70, 255, 0.25);
+  box-shadow: 0 4px 24px rgba(155, 140, 255, 0.25);
   z-index: 300;
   flex-shrink: 0;
 
@@ -112,7 +112,7 @@
     width: 36px;
     height: 36px;
     border-radius: 50%;
-    background: rgba(107, 70, 255, 0.15);
+    background: rgba(155, 140, 255, 0.15);
     display: flex;
     align-items: center;
     justify-content: center;

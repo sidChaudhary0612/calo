@@ -9,6 +9,7 @@ export interface SimulatedPeer {
   rssi:       number;
   battery:    number;
   status:     'online' | 'away' | 'offline';
+  groupCode?: string;   // 4-digit passcode this peer is advertising (for dev join)
   appearsAt:  number;   // scan tick when this peer first becomes visible
   leavesAt:   number;   // scan tick when this peer goes out of range (0 = never)
 }
@@ -56,6 +57,9 @@ export function buildRegistry(): void {
       rssi,
       battery:    20 + Math.floor(Math.random() * 80),
       status:     Math.random() < 0.8 ? 'online' : 'away',
+      // First simulated peer always advertises a fixed passcode so a dev can type
+      // "1234" in Join with Code and watch auto-join populate the member list.
+      groupCode:  i === 0 ? '1234' : undefined,
       appearsAt,
       leavesAt,
     });
@@ -97,6 +101,7 @@ export class BleWeb extends WebPlugin implements BlePluginDefinition {
             n: peer.fullName,
             s: peer.status,
             b: peer.battery,
+            ...(peer.groupCode ? { g: peer.groupCode } : {}),
           }),
         };
 
@@ -114,6 +119,19 @@ export class BleWeb extends WebPlugin implements BlePluginDefinition {
   }
 
   async stopAdvertise(): Promise<void> {}
+
+  async sendInvite(opts: { deviceAddress: string; payload: string }): Promise<void> {
+    // Simulate the invited peer accepting ~1.2s later so the leader-side flow
+    // ("Invited ✓" → "Joined! 🎉") can be exercised in the browser. The sent
+    // payload is "J" + passcode(4) + groupName; we reply "A" + passcode.
+    const passcode = opts.payload.slice(1, 5);
+    setTimeout(() => {
+      this.notifyListeners('inviteReceived', {
+        payload:     'A' + passcode,
+        fromAddress: opts.deviceAddress,
+      });
+    }, 1200);
+  }
 
   async isBluetoothEnabled(): Promise<{ enabled: boolean }> {
     return { enabled: true };
