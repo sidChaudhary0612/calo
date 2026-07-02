@@ -86,9 +86,13 @@ public class BlePlugin extends Plugin {
         if (isScanning) { call.resolve(); return; }
 
         if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.S) {
-            if (getContext().checkSelfPermission(Manifest.permission.BLUETOOTH_SCAN) != PackageManager.PERMISSION_GRANTED) {
+            boolean scanGranted    = getContext().checkSelfPermission(Manifest.permission.BLUETOOTH_SCAN)    == PackageManager.PERMISSION_GRANTED;
+            boolean connectGranted = getContext().checkSelfPermission(Manifest.permission.BLUETOOTH_CONNECT) == PackageManager.PERMISSION_GRANTED;
+            // BLUETOOTH_CONNECT is needed to run the GATT server (advertiser) and read
+            // peer names / beacon payloads (scanner), so request it alongside SCAN.
+            if (!scanGranted || !connectGranted) {
                 savedScanCall = call;
-                requestPermissionForAlias("bluetoothScan", call, "scanPermissionCallback");
+                requestPermissionForAliases(new String[]{ "bluetoothScan", "bluetoothConnect" }, call, "scanPermissionCallback");
                 return;
             }
         } else {
@@ -363,17 +367,22 @@ public class BlePlugin extends Plugin {
         final String finalDeviceName = deviceName;
         final int rssi = result.getRssi();
 
-        // If we got a full JSON object from service data, emit immediately
+        // ALWAYS surface the rider the instant we detect its beacon. Presence alone
+        // is enough to show a blip; the name/battery/status are enriched below via a
+        // GATT read once (and if) it succeeds. Emitting here guarantees the rider
+        // never disappears just because the phone-to-phone GATT connection fails —
+        // which is common when both devices advertise + scan + serve GATT at once.
+        emitDevice(device.getAddress(), finalDeviceName, rssi, fastPayload);
+
+        // If we already got a full JSON object from service data, nothing to enrich.
         if (fastPayload.startsWith("{") && fastPayload.endsWith("}")) {
-            emitDevice(device.getAddress(), finalDeviceName, rssi, fastPayload);
             return;
         }
 
-        // Payload is missing or truncated — do a GATT read to get the full beacon
+        // Payload is missing or truncated — do a GATT read to get the full beacon.
         if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.S &&
             getContext().checkSelfPermission(Manifest.permission.BLUETOOTH_CONNECT) != PackageManager.PERMISSION_GRANTED) {
-            // No CONNECT permission — emit with whatever we have
-            emitDevice(device.getAddress(), finalDeviceName, rssi, fastPayload);
+            // No CONNECT permission — presence emit above is all we can do.
             return;
         }
 
